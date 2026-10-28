@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 export default function UsersTable({ users, onSelectUser }) {
   if (!users || users.length === 0) {
     return (
@@ -14,7 +16,7 @@ export default function UsersTable({ users, onSelectUser }) {
     const inactive = status === 'inactive'
     return (
       <span
-        className={`inline-flex items-center rounded-pill px-2 py-0.5 text-micro font-semibold uppercase tracking-wide ${
+        className={`inline-flex items-center rounded-xs px-2 py-0.5 text-micro font-semibold uppercase tracking-wide ${
           inactive
             ? 'bg-[var(--ew-ground)] text-[var(--ew-muted)]'
             : 'bg-[#f0fdf4] text-[#15803d]'
@@ -70,7 +72,7 @@ export default function UsersTable({ users, onSelectUser }) {
                         month: 'short',
                         day: 'numeric',
                       })
-                    : '—'}
+                    : '-'}
                 </td>
               </tr>
             ))}
@@ -96,22 +98,22 @@ export default function UsersTable({ users, onSelectUser }) {
                   {user.email}
                 </p>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-1">
-                <span className="text-xs font-medium capitalize text-[var(--ew-muted)]">
-                  {user.role}
-                </span>
-                {statusBadge(user.status)}
-              </div>
+              <span className="shrink-0 text-xs font-medium capitalize text-[var(--ew-muted)]">
+                {user.role}
+              </span>
             </div>
-            <p className="mt-2 text-xs text-[var(--ew-muted)]">
-              {user.createdAt
-                ? new Date(user.createdAt).toLocaleDateString(undefined, {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })
-                : '—'}
-            </p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-xs text-[var(--ew-muted)]">
+                {user.createdAt
+                  ? new Date(user.createdAt).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  : '-'}
+              </p>
+              {statusBadge(user.status)}
+            </div>
           </div>
         ))}
       </div>

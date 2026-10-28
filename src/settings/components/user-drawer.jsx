@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuPen, LuTrash2, LuX } from 'react-icons/lu'
+import { LuPen, LuX } from 'react-icons/lu'
 import { deleteUser, updateUser } from '../api.js'
 import Alert from '../../appcomponents/alert.jsx'
 
@@ -10,7 +10,7 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
   const ignorePopRef = useRef(false)
   onCloseRef.current = onClose
   const [isEditing, setIsEditing] = useState(false)
-  const [form, setForm] = useState({ username: '', email: '', role: 'staff', password: '' })
+  const [form, setForm] = useState({ username: '', email: '', role: 'staff', status: 'active', password: '' })
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState(null)
   const [isToggling, setIsToggling] = useState(false)
@@ -70,6 +70,7 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
         username: user.username ?? '',
         email: user.email ?? '',
         role: user.role ?? 'staff',
+        status: user.status ?? 'active',
         password: '',
       })
       setIsEditing(false)
@@ -88,6 +89,7 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
     if (form.username.trim() && form.username.trim() !== user.username) payload.username = form.username.trim()
     if (form.email.trim() && form.email.trim().toLowerCase() !== user.email) payload.email = form.email.trim()
     if (form.role && form.role !== user.role) payload.role = form.role
+    if (form.status && form.status !== user.status) payload.status = form.status
     if (form.password) payload.password = form.password
 
     try {
@@ -135,6 +137,7 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
     { label: 'Username', value: user.username },
     { label: 'Email', value: user.email },
     { label: 'Role', value: user.role },
+    { label: 'Status', value: user.status === 'inactive' ? 'Inactive' : 'Active' },
     {
       label: 'Created',
       value: user.createdAt
@@ -145,7 +148,7 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
             hour: '2-digit',
             minute: '2-digit',
           })
-        : '—',
+        : 'NA',
     },
   ]
 
@@ -183,13 +186,26 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
         </div>
 
         {!isEditing ? (
-          <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          <div className="flex-1 space-y-2 overflow-y-auto p-4">
             {details.map((row) => (
-              <div key={row.label}>
-                <p className="text-micro font-semibold uppercase tracking-[0.08em] text-muted">
+              <div
+                key={row.label}
+                className="grid grid-cols-[5rem_1fr] items-center gap-3 border-b border-[var(--ew-line)] py-2.5 last:border-0"
+              >
+                <span className="text-meta font-medium text-[var(--ew-muted)]">
                   {row.label}
-                </p>
-                <p className="mt-1 text-body-sm text-[var(--ew-ink)]">{row.value || '—'}</p>
+                </span>
+                <span className="flex justify-end">
+                  {row.label === 'Role' ? (
+                    <span className="inline-flex rounded-xs bg-accent-soft px-2 py-0.5 text-body font-medium text-accent-strong">
+                      {row.value || 'NA'}
+                    </span>
+                  ) : (
+                    <span className="text-right text-body-sm text-[var(--ew-ink)]">
+                      {row.value || 'NA'}
+                    </span>
+                  )}
+                </span>
               </div>
             ))}
           </div>
@@ -212,6 +228,7 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
               <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="eu-email">
                 Email
               </label>
+        
               <input
                 id="eu-email"
                 type="email"
@@ -247,6 +264,30 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
             </div>
 
             <div>
+              <span className="block text-label font-medium text-[var(--ew-muted)]">Status</span>
+              <div className="mt-2 inline-flex rounded-lg border p-1" style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}>
+                {['active', 'inactive'].map((status) => {
+                  const isActive = form.status === status
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, status }))}
+                      className={`${isActive ? 'rounded-xs' : 'rounded-lg'} px-4 py-1.5 text-sm font-medium transition-all duration-300 ease-out`}
+                      style={
+                        isActive
+                          ? { background: '#cc785c', color: '#fff' }
+                          : { color: 'var(--ew-muted)' }
+                      }
+                    >
+                      {status === 'active' ? 'Active' : 'Inactive'}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
               <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="eu-password">
                 New password (optional)
               </label>
@@ -273,7 +314,6 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
                 {error}
               </div>
             )}
-
           </form>
         )}
 

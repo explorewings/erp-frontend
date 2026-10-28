@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { NAV_ITEMS } from '../nav.js'
 import { LogoutIcon, PanelIcon } from '../../components/icons.jsx'
+import { LuX } from 'react-icons/lu'
 import { useSignOut } from '../../authetication/use-sign-out.js'
 
 function BrandLockup({ collapsed }) {
@@ -34,7 +35,7 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
   return (
     <>
       <div
-        className={`fixed inset-0 z-40 bg-ink/35 transition-opacity lg:hidden ${
+        className={`fixed inset-0 z-[60] bg-ink/35 transition-opacity lg:hidden ${
           open ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         onClick={onClose}
@@ -42,12 +43,18 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-line bg-surface transition-[transform,width] duration-200 lg:static lg:z-auto lg:translate-x-0 ${
-          collapsed ? 'lg:w-[72px]' : 'lg:w-64'
-        } ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 right-0 z-[60] flex w-full shrink-0 flex-col border-l border-line bg-surface transition-[transform,width] duration-200 lg:static lg:left-0 lg:right-auto lg:z-auto lg:translate-x-0 lg:border-r lg:border-l-0 ${collapsed ? 'lg:w-[72px]' : 'lg:w-64'} ${open ? 'translate-x-0' : 'translate-x-full'}`}
       >
-        <div className="flex h-16 items-center border-b border-line px-3">
+        <div className="flex h-16 items-center gap-2 border-b border-line px-3">
           <BrandLockup collapsed={collapsed} />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close navigation"
+            className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-xs text-muted transition-colors hover:text-ink focus-visible:ring-4 focus-visible:ring-accent/15 lg:hidden"
+          >
+            <LuX className="h-4 w-4" />
+          </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3" aria-label="Primary">
@@ -113,6 +120,14 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
           <div className={`flex items-center gap-2 ${collapsed ? 'lg:flex-col' : ''}`}>
             <button
               type="button"
+              onClick={onClose}
+              aria-label="Close navigation"
+              className="flex h-10 flex-1 items-center justify-center rounded-xs bg-[#5f5b55] px-3 text-body-sm font-medium text-white outline-none transition-colors hover:bg-[#4a4640] focus-visible:ring-4 focus-visible:ring-accent/15 lg:hidden"
+            >
+              Close
+            </button>
+            <button
+              type="button"
               onClick={signOut}
               aria-label="Sign out"
               title={collapsed ? 'Sign out' : undefined}
@@ -145,7 +160,7 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
           </div>
 
           {!collapsed && (
-            <p className="mt-2 px-3 text-micro leading-relaxed text-muted">Console v0.1</p>
+            <p className="mt-2 hidden px-3 text-micro leading-relaxed text-muted lg:block">Console v0.1</p>
           )}
         </div>
       </aside>
