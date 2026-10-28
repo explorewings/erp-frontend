@@ -97,6 +97,9 @@
 }
 
 @layer utilities {
+  .bg-ink {
+    background-color: #cc785c !important;
+  }
   .ew-ground {
     background-color: var(--ew-ground);
     background-image:

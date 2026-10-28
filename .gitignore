@@ -26,3 +26,6 @@ dist-ssr
 # Agent / AI tooling directories
 .agent/
 .claude/
+
+# Graphify generated artifacts
+graphify-out/

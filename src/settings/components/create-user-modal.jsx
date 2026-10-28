@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createUser } from '../api.js'
 import Loader from '../../appcomponents/loader.jsx'
 import { EyeIcon, EyeOffIcon } from '../../components/icons.jsx'
@@ -17,6 +17,9 @@ export default function CreateUserModal({ open, token, onClose, onCreated }) {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
+  const onCloseRef = useRef(onClose)
+  const ignorePopRef = useRef(false)
+  onCloseRef.current = onClose
   const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
@@ -29,11 +32,39 @@ export default function CreateUserModal({ open, token, onClose, onCreated }) {
   useEffect(() => {
     if (!open) return undefined
     const handleKey = (event) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') closeOverlay()
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
   }, [open, onClose])
+
+  const closeOverlay = () => {
+    ignorePopRef.current = true
+    onCloseRef.current?.()
+    if (window.history.state?.overlay) {
+      window.history.back()
+    } else {
+      ignorePopRef.current = false
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onPopState = (event) => {
+      if (ignorePopRef.current) {
+        ignorePopRef.current = false
+        return
+      }
+      onCloseRef.current?.()
+    }
+    window.history.pushState({ overlay: true }, '', window.location.href)
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [open])
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   if (!open) return null
 
@@ -54,7 +85,7 @@ export default function CreateUserModal({ open, token, onClose, onCreated }) {
         password: form.password,
       })
       onCreated(created)
-      onClose()
+      closeOverlay()
     } catch (err) {
       setError(err?.message || 'Unable to create user.')
     } finally {

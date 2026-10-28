@@ -4,6 +4,7 @@ import { fetchUsers } from '../api.js'
 import Loader from '../../appcomponents/loader.jsx'
 import Toast from '../../appcomponents/toast.jsx'
 import UsersTable from '../components/users-table.jsx'
+import UserDrawer from '../components/user-drawer.jsx'
 import CreateUserModal from '../components/create-user-modal.jsx'
 import { LuPlus } from 'react-icons/lu'
 import { NAV_ITEMS } from '../../erplayout/nav.js'
@@ -17,6 +18,7 @@ export default function Settings() {
   const { token } = useAuth()
   const [activeTab, setActiveTab] = useState('users')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [selectedUser, setSelectedUser] = useState(null)
   const [toast, setToast] = useState(null)
   const [users, setUsers] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -91,7 +93,7 @@ export default function Settings() {
 
   return (
     <>
-    <section className={`ew-rise mx-auto max-w-6xl space-y-6 ${isCreateOpen ? 'blur-sm pointer-events-none select-none' : ''}`}>
+    <section className={`ew-rise mx-auto max-w-6xl space-y-6 ${(isCreateOpen || selectedUser) ? 'blur-sm pointer-events-none select-none' : ''}`}>
       <div className="flex items-center justify-between">
         {tabActions}
         <button
@@ -127,7 +129,7 @@ export default function Settings() {
               <Loader />
             </div>
           ) : (
-            <UsersTable users={users} />
+            <UsersTable users={users} onSelectUser={setSelectedUser} />
           )}
         </>
       )}
@@ -172,6 +174,22 @@ export default function Settings() {
       )}
     </section>
     <Toast open={!!toast} message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
+    <UserDrawer
+      user={selectedUser}
+      open={!!selectedUser}
+      token={token}
+      onClose={() => setSelectedUser(null)}
+      onUpdate={(updated) => {
+        setUsers((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+        setSelectedUser(updated)
+      }}
+      onNotify={(message) => setToast({ message, type: 'success' })}
+      onDeleted={(id) => {
+        setUsers((prev) => prev.filter((item) => item.id !== id))
+        setSelectedUser(null)
+        setToast({ message: 'User deleted', type: 'success' })
+      }}
+    />
     <CreateUserModal
       open={isCreateOpen}
       token={token}

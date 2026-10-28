@@ -1,4 +1,4 @@
-export default function UsersTable({ users }) {
+export default function UsersTable({ users, onSelectUser }) {
   if (!users || users.length === 0) {
     return (
       <div
@@ -7,6 +7,21 @@ export default function UsersTable({ users }) {
       >
         No users found.
       </div>
+    )
+  }
+
+  const statusBadge = (status) => {
+    const inactive = status === 'inactive'
+    return (
+      <span
+        className={`inline-flex items-center rounded-pill px-2 py-0.5 text-micro font-semibold uppercase tracking-wide ${
+          inactive
+            ? 'bg-[var(--ew-ground)] text-[var(--ew-muted)]'
+            : 'bg-[#f0fdf4] text-[#15803d]'
+        }`}
+      >
+        {inactive ? 'Inactive' : 'Active'}
+      </span>
     )
   }
 
@@ -20,7 +35,7 @@ export default function UsersTable({ users }) {
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr style={{ background: 'var(--ew-ground)' }}>
-              {['Username', 'Email', 'Role', 'Created'].map((label) => (
+              {['Username', 'Email', 'Role', 'Status', 'Created'].map((label) => (
                 <th
                   key={label}
                   className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ew-muted)]"
@@ -34,7 +49,8 @@ export default function UsersTable({ users }) {
             {users.map((user) => (
               <tr
                 key={user.id}
-                className="group border-b transition-colors hover:bg-[#cc785c]"
+                onClick={() => onSelectUser?.(user)}
+                className="group cursor-pointer border-b transition-colors hover:bg-[#cc785c]"
                 style={{ borderColor: 'var(--ew-line)' }}
               >
                 <td className="px-5 py-3.5 font-medium text-[var(--ew-ink)] group-hover:text-white">
@@ -43,9 +59,10 @@ export default function UsersTable({ users }) {
                 <td className="px-5 py-3.5 text-[var(--ew-ink)] group-hover:text-white">
                   {user.email}
                 </td>
-                <td className="px-5 py-3.5 text-[var(--ew-ink)] group-hover:text-white">
+                <td className="px-5 py-3.5 text-[var(--ew-ink)] capitalize group-hover:text-white">
                   {user.role}
                 </td>
+                <td className="px-5 py-3.5">{statusBadge(user.status)}</td>
                 <td className="px-5 py-3.5 text-[var(--ew-ink)] group-hover:text-white">
                   {user.createdAt
                     ? new Date(user.createdAt).toLocaleDateString(undefined, {
@@ -66,7 +83,8 @@ export default function UsersTable({ users }) {
         {users.map((user) => (
           <div
             key={user.id}
-            className="rounded-lg border p-4 transition-colors hover:bg-[#cc785c] hover:text-white"
+            onClick={() => onSelectUser?.(user)}
+            className="cursor-pointer rounded-lg border p-4 transition-colors hover:bg-[#cc785c] hover:text-white"
             style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-ground)' }}
           >
             <div className="flex items-start justify-between gap-3">
@@ -78,9 +96,12 @@ export default function UsersTable({ users }) {
                   {user.email}
                 </p>
               </div>
-              <span className="shrink-0 text-xs font-medium capitalize text-[var(--ew-muted)]">
-                {user.role}
-              </span>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span className="text-xs font-medium capitalize text-[var(--ew-muted)]">
+                  {user.role}
+                </span>
+                {statusBadge(user.status)}
+              </div>
             </div>
             <p className="mt-2 text-xs text-[var(--ew-muted)]">
               {user.createdAt
