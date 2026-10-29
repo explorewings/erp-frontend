@@ -1,6 +1,9 @@
 import { NavLink } from 'react-router-dom'
+import { useAuth } from '../../authetication/auth-context.js'
+import { useState } from 'react'
 import { NAV_ITEMS } from '../nav.js'
 import { LogoutIcon, PanelIcon } from '../../components/icons.jsx'
+import Alert from '../../appcomponents/alert.jsx'
 import { LuX } from 'react-icons/lu'
 import { useSignOut } from '../../authetication/use-sign-out.js'
 
@@ -31,6 +34,13 @@ function BrandLockup({ collapsed }) {
 
 export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse }) {
   const signOut = useSignOut()
+  const { canAccess } = useAuth()
+  const [confirmSignOut, setConfirmSignOut] = useState(false)
+  const handleSignOut = () => setConfirmSignOut(true)
+  const confirmSignOutNow = () => {
+    setConfirmSignOut(false)
+    signOut()
+  }
 
   return (
     <>
@@ -43,7 +53,7 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
       />
 
       <aside
-        className={`fixed inset-y-0 right-0 z-[60] flex w-full shrink-0 flex-col border-l border-line bg-surface transition-[transform,width] duration-200 lg:static lg:left-0 lg:right-auto lg:z-auto lg:translate-x-0 lg:border-r lg:border-l-0 ${collapsed ? 'lg:w-[72px]' : 'lg:w-64'} ${open ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed inset-y-0 right-0 z-[60] flex w-full shrink-0 flex-col border-l border-line bg-surface transition-[transform,width] duration-200 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:left-0 lg:right-auto lg:z-auto lg:translate-x-0 lg:border-r lg:border-l-0 ${collapsed ? 'lg:w-[72px]' : 'lg:w-64'} ${open ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="flex h-16 items-center gap-2 border-b border-line px-3">
           <BrandLockup collapsed={collapsed} />
@@ -67,7 +77,7 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
           </p>
 
           <ul className="divide-y divide-line overflow-hidden rounded-xs border border-line">
-            {NAV_ITEMS.map(({ label, to, Icon }) => (
+            {NAV_ITEMS.filter((item) => canAccess(item.key)).map(({ label, to, Icon }) => (
               <li key={to}>
                 <NavLink
                   to={to}
@@ -128,7 +138,7 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
             </button>
             <button
               type="button"
-              onClick={signOut}
+              onClick={handleSignOut}
               aria-label="Sign out"
               title={collapsed ? 'Sign out' : undefined}
               className={`flex h-10 flex-1 items-center gap-3 rounded-xs border border-danger-strong bg-danger px-3 text-body-sm font-medium text-white outline-none transition-colors hover:bg-danger-strong focus-visible:ring-4 focus-visible:ring-ink/25 ${
@@ -164,6 +174,17 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
           )}
         </div>
       </aside>
+
+      <Alert
+        open={confirmSignOut}
+        title="Sign out?"
+        description="You will be signed out of the console."
+        confirmLabel="Sign out"
+        cancelLabel="Cancel"
+        variant="destructive"
+        onConfirm={confirmSignOutNow}
+        onCancel={() => setConfirmSignOut(false)}
+      />
     </>
   )
 }

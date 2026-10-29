@@ -43,6 +43,7 @@ export default function ErpLayout() {
             <Outlet />
           </div>
         </main>
+
       </div>
     </div>
   )

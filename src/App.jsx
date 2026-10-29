@@ -6,7 +6,7 @@ import ErpLayout from './erplayout/components/erp-layout.jsx'
 import { HOME_PATH } from './erplayout/nav.js'
 import Calendar from './erplayout/pages/calendar.jsx'
 import Resorts from './erplayout/pages/resorts.jsx'
-import Packages from './erplayout/pages/packages.jsx'
+import Packages from './packages/pages/packages.jsx'
 import Clients from './erplayout/pages/clients.jsx'
 import Crm from './erplayout/pages/crm.jsx'
 import Settings from './settings/pages/settings.jsx'
@@ -14,6 +14,14 @@ import Settings from './settings/pages/settings.jsx'
 function RequireAuth({ children }) {
   const { isAuthenticated } = useAuth()
   return isAuthenticated ? children : <Navigate to="/login" replace />
+}
+
+function RequireSuperadmin({ children }) {
+  const { user } = useAuth()
+  if (user?.role !== 'superadmin' && user?.role !== 'superuser') {
+    return <Navigate to={HOME_PATH} replace />
+  }
+  return children
 }
 
 function LoginRoute() {
@@ -41,7 +49,7 @@ export default function App() {
             <Route path="packages" element={<Packages />} />
             <Route path="clients" element={<Clients />} />
             <Route path="crm" element={<Crm />} />
-            <Route path="settings" element={<Settings />} />
+            <Route path="settings" element={<RequireSuperadmin><Settings /></RequireSuperadmin>} />
           </Route>
           <Route path="/" element={<Navigate to={HOME_PATH} replace />} />
           <Route path="*" element={<Navigate to={HOME_PATH} replace />} />

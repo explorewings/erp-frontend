@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Toast from '../../appcomponents/toast.jsx'
 import { useNavigate } from 'react-router-dom'
 import LoginForm from '../components/login form.jsx'
 import { useAuth } from '../auth-context.js'
@@ -7,6 +8,7 @@ import { AlertIcon, CheckIcon } from '../../components/icons.jsx'
 export default function Login() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState(null)
+  const [toast, setToast] = useState(null)
   const { login } = useAuth()
   const navigate = useNavigate()
 
@@ -18,16 +20,19 @@ export default function Login() {
       setMessage({ type: 'success', text: `Welcome back, ${user.username}.` })
       navigate('/erp/calendar', { replace: true })
     } catch (error) {
-      setMessage({
-        type: 'error',
-        text: error.message || 'Something went wrong. Try again.',
-      })
+      const text = error.message || 'Something went wrong. Try again.'
+      if (text.toLowerCase().includes('deactivated')) {
+        setToast({ message: 'User has been deactivated', type: 'error' })
+      } else {
+        setMessage({ type: 'error', text })
+      }
     } finally {
       setLoading(false)
     }
   }
 
   return (
+    <>
     <main className="ew-ground flex min-h-screen items-center justify-center px-5 py-12 sm:px-6">
       <div className="w-full max-w-[25.5rem]">
         <header className="ew-rise mb-8 flex items-center gap-3">
@@ -75,24 +80,9 @@ export default function Login() {
           )}
         </div>
 
-        <p className="ew-rise mt-7 text-center text-meta leading-relaxed text-muted">
-          By continuing, you agree to our{' '}
-          <a
-            href="#"
-            className="font-medium text-ink underline decoration-line underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/40"
-          >
-            Terms
-          </a>{' '}
-          and{' '}
-          <a
-            href="#"
-            className="font-medium text-ink underline decoration-line underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/40"
-          >
-            Privacy Policy
-          </a>
-          .
-        </p>
       </div>
     </main>
+    <Toast open={!!toast} message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
+    </>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { loginRequest } from './api.js'
+import { MENU_KEYS } from '../erplayout/nav.js'
 import { AuthContext } from './auth-context.js'
 
 const STORAGE_KEY = 'ew.erp.session'
@@ -21,11 +22,24 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem(STORAGE_KEY)
   }, [session])
 
+  const deniedMenus = session?.deniedMenus ?? (
+    Array.isArray(session?.accessibleMenus)
+      ? MENU_KEYS.filter((key) => !session.accessibleMenus.includes(key))
+      : null
+  )
+  const isSuperuser = session?.user?.role === 'superadmin' || session?.user?.role === 'superuser'
+  const canAccess = (key) => {
+    if (key === 'menu:settings') return isSuperuser
+    return isSuperuser || deniedMenus === null || !deniedMenus.includes(key)
+  }
+
   const value = useMemo(
     () => ({
       user: session?.user ?? null,
       token: session?.token ?? null,
+      deniedMenus,
       isAuthenticated: Boolean(session?.token),
+      canAccess,
       login: async (credentials) => {
         const data = await loginRequest(credentials)
         setSession(data)

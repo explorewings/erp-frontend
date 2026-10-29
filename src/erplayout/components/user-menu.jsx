@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../authetication/auth-context.js'
 import { useSignOut } from '../../authetication/use-sign-out.js'
 import { ChevronIcon, LogoutIcon } from '../../components/icons.jsx'
+import Alert from '../../appcomponents/alert.jsx'
 
 export default function UserMenu() {
   const { user } = useAuth()
   const [open, setOpen] = useState(false)
+  const [confirmSignOut, setConfirmSignOut] = useState(false)
   const containerRef = useRef(null)
   const signOut = useSignOut()
 
@@ -33,6 +35,11 @@ export default function UserMenu() {
 
   const handleSignOut = () => {
     setOpen(false)
+    setConfirmSignOut(true)
+  }
+
+  const confirmSignOutNow = () => {
+    setConfirmSignOut(false)
     signOut()
   }
 
@@ -94,6 +101,17 @@ export default function UserMenu() {
           </button>
         </div>
       )}
+
+      <Alert
+        open={confirmSignOut}
+        title="Sign out?"
+        description="You will be signed out of the console."
+        confirmLabel="Sign out"
+        cancelLabel="Cancel"
+        variant="destructive"
+        onConfirm={confirmSignOutNow}
+        onCancel={() => setConfirmSignOut(false)}
+      />
     </div>
   )
 }

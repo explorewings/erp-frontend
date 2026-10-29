@@ -32,7 +32,7 @@ export default function Alert({
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-ink/30"
+        className="absolute inset-0 bg-ink/10 backdrop-blur-sm"
         aria-hidden="true"
         onClick={onCancel}
       />

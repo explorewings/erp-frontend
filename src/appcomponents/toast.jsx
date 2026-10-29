@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { LuCheck, LuCircleAlert, LuX } from 'react-icons/lu'
 
 export default function Toast({ open, message, type = 'success', onClose, duration = 3000 }) {
@@ -29,14 +30,17 @@ export default function Toast({ open, message, type = 'success', onClose, durati
 
   const isSuccess = type === 'success'
 
-  return (
+  return createPortal(
     <div
       role="status"
       aria-live="polite"
-      className={`fixed bottom-6 left-1/2 z-50 flex max-w-sm -translate-x-1/2 items-start gap-3 rounded-control border px-4 py-3 shadow-panel transition-all duration-300 ease-out ${
-        visible ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0 pointer-events-none'
+      className={`fixed z-[70] flex max-w-sm items-start gap-3 rounded-control border px-4 py-3 shadow-panel transition-all duration-300 ease-out ${
+        visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
       style={{
+        left: '50%',
+        bottom: '1.5rem',
+        transform: visible ? 'translateX(-50%)' : 'translate(-50%, 1rem)',
         borderColor: 'var(--ew-line)',
         background: 'var(--ew-surface)',
       }}
@@ -64,6 +68,7 @@ export default function Toast({ open, message, type = 'success', onClose, durati
       >
         <LuX className="h-3.5 w-3.5" />
       </button>
-    </div>
+    </div>,
+    document.body,
   )
 }

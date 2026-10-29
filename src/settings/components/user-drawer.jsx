@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { LuPen, LuX } from 'react-icons/lu'
 import { deleteUser, updateUser } from '../api.js'
 import Alert from '../../appcomponents/alert.jsx'
+import Tooltip from '../../appcomponents/tooltip.jsx'
 
 export default function UserDrawer({ user, open, token, onClose, onUpdate, onNotify, onDeleted }) {
   const [visible, setVisible] = useState(false)
@@ -339,22 +340,26 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
             </>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={handleToggleStatus}
-                disabled={isToggling || user?.role === 'superadmin' || user?.role === 'superuser'}
-                className="rounded-xs bg-[#5f5b55] px-4 py-2 text-body-sm font-medium text-white transition-colors hover:bg-[#4a4640] disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {user.status === 'inactive' ? 'Activate' : 'Deactivate'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowDeleteAlert(true)}
-                disabled={isDeleting || user?.role === 'superadmin' || user?.role === 'superuser'}
-                className="rounded-xs bg-danger px-4 py-2 text-body-sm font-medium text-white transition-colors hover:bg-danger-strong disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                Delete
-              </button>
+              <Tooltip content={user?.role === 'superadmin' || user?.role === 'superuser' ? 'Cannot deactivate' : null}>
+                <button
+                  type="button"
+                  onClick={handleToggleStatus}
+                  disabled={isToggling || user?.role === 'superadmin' || user?.role === 'superuser'}
+                  className="rounded-xs bg-[#5f5b55] px-4 py-2 text-body-sm font-medium text-white transition-colors hover:bg-[#4a4640] disabled:opacity-60 disabled:cursor-default"
+                >
+                  {user.status === 'inactive' ? 'Activate' : 'Deactivate'}
+                </button>
+              </Tooltip>
+              <Tooltip content={user?.role === 'superadmin' || user?.role === 'superuser' ? 'Cannot delete' : null}>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteAlert(true)}
+                  disabled={isDeleting || user?.role === 'superadmin' || user?.role === 'superuser'}
+                  className="rounded-xs bg-danger px-4 py-2 text-body-sm font-medium text-white transition-colors hover:bg-danger-strong disabled:opacity-60 disabled:cursor-default"
+                >
+                  Delete
+                </button>
+              </Tooltip>
             </>
           )}
         </div>
