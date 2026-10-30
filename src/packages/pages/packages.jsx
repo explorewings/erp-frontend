@@ -4,6 +4,7 @@ import { fetchPackages, fetchPackageCategories } from '../api.js'
 import Loader from '../../appcomponents/loader.jsx'
 import Select from '../../appcomponents/select.jsx'
 import PackageCard from '../components/package-card.jsx'
+import PackageFooter from '../components/footer.jsx'
 
 const LIMIT = 20
 
@@ -61,8 +62,8 @@ function Packages() {
   }, [debouncedSearch, category])
 
   return (
-    <section className="ew-rise mx-auto flex min-h-[calc(100vh-7rem)] max-w-6xl flex-col sm:min-h-[calc(100vh-8rem)]">
-      <div className="flex items-center justify-between gap-3">
+    <section className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
         <input
           type="search"
           value={search}
@@ -86,7 +87,7 @@ function Packages() {
 
       {error && (
         <div
-          className="rounded-xl border px-4 py-3 text-sm"
+          className="mx-auto w-full max-w-6xl rounded-xl border px-4 py-3 text-sm"
           style={{
             borderColor: 'rgba(194, 65, 12, 0.28)',
             background: 'rgba(194, 65, 12, 0.06)',
@@ -99,8 +100,8 @@ function Packages() {
 
       {isLoading ? (
         <div
-          className="flex items-center justify-center rounded-2xl border text-sm text-[var(--ew-muted)]"
-          style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)', height: '50vh' }}
+          className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border text-sm text-[var(--ew-muted)]"
+          style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
         >
           <Loader />
         </div>
@@ -109,14 +110,14 @@ function Packages() {
           className="flex min-h-0 flex-1 flex-col"
         >
           <div
-            className="flex-1 overflow-y-auto"
+            className="min-h-0 flex-1 overflow-y-auto"
             style={{
               scrollbarWidth: 'thin',
               scrollbarColor: 'var(--ew-line) transparent',
             }}
           >
             {items.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
                 {items.map((pkg) => (
                   <PackageCard key={pkg.id} pkg={pkg} />
                 ))}
@@ -128,33 +129,18 @@ function Packages() {
             ) : null}
           </div>
 
-          <div
-            className="flex items-center justify-between gap-3 border-t px-4 py-3"
-            style={{ borderColor: 'var(--ew-line)' }}
-          >
-            <p className="text-sm text-[var(--ew-muted)]">
-              Page {page} of {totalPages} · {total} results
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="rounded-xs border px-4 py-2 text-body-sm font-medium text-[var(--ew-ink)] transition-colors hover:bg-ground/70 disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{ borderColor: 'var(--ew-line)' }}
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="rounded-xs bg-[#cc785c] px-4 py-2 text-body-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <PackageFooter
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            onPrevious={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+            onNext={() =>
+              setPage((currentPage) => Math.min(totalPages, currentPage + 1))
+            }
+            canPrevious={page > 1}
+            canNext={page < totalPages}
+            className="mx-[-1rem] border-t bg-surface sm:mx-[-2rem]"
+          />
         </div>
       )}
     </section>

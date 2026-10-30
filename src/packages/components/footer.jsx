@@ -1,7 +1,8 @@
 export default function PackageFooter({ page, totalPages, total, onPrevious, onNext, canPrevious, canNext, className = '' }) {
   return (
     <div
-      className={`flex items-center justify-between gap-3 px-4 py-3 ${className}`}
+      className={`flex items-center justify-between gap-3 px-4 py-3 sm:px-6 ${className}`}
+      style={{ borderColor: 'var(--ew-line)' }}
     >
       <p className="text-sm text-[var(--ew-muted)]">
         Page {page} of {totalPages} · {total} results

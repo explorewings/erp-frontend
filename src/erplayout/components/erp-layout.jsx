@@ -17,6 +17,7 @@ export default function ErpLayout() {
   const [navOpen, setNavOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const { pathname } = useLocation()
+  const isPackagesPage = pathname.endsWith('/packages')
 
   useEffect(() => {
     try {
@@ -27,7 +28,7 @@ export default function ErpLayout() {
   }, [collapsed])
 
   return (
-    <div className="flex min-h-screen bg-ground text-ink">
+    <div className="flex h-screen overflow-hidden bg-ground text-ink">
       <ErpSidebar
         open={navOpen}
         onClose={() => setNavOpen(false)}
@@ -35,11 +36,24 @@ export default function ErpLayout() {
         onToggleCollapse={() => setCollapsed((value) => !value)}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex h-screen min-h-0 min-w-0 flex-1 flex-col">
         <ErpTopbar onMenu={() => setNavOpen(true)} />
 
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
-          <div key={pathname} className="ew-rise mx-auto w-full max-w-6xl">
+        <main
+          className={`flex min-h-0 min-w-0 flex-1 flex-col px-4 ${
+            isPackagesPage
+              ? 'overflow-hidden pt-6 sm:px-8 sm:pt-8'
+              : 'overflow-y-auto py-6 sm:px-8 sm:py-8'
+          }`}
+        >
+          <div
+            key={pathname}
+            className={
+              isPackagesPage
+                ? 'flex min-h-0 w-full flex-1 flex-col'
+                : 'ew-rise mx-auto w-full max-w-6xl'
+            }
+          >
             <Outlet />
           </div>
         </main>

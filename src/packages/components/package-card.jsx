@@ -1,6 +1,6 @@
 import { PackagesIcon } from '../../components/icons.jsx'
 
-export default function PackageCard({ pkg }) {
+export default function PackageCard({ pkg, onView }) {
   const image = pkg?.image1
 
   return (
@@ -9,7 +9,7 @@ export default function PackageCard({ pkg }) {
       style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
     >
       {image && (
-        <div className="mb-4 space-y-2">
+        <div className="mb-3 space-y-2">
           <div className="overflow-hidden rounded-control border" style={{ borderColor: 'var(--ew-line)' }}>
             <img
               src={image}
@@ -25,30 +25,27 @@ export default function PackageCard({ pkg }) {
         </div>
       )}
 
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--ew-ground)]">
-          <PackagesIcon className="h-5 w-5 text-[var(--ew-ink)]" />
-        </div>
-        <div className="min-w-0">
-          <h3 className="truncate text-body font-semibold text-[var(--ew-ink)]">
-            {pkg?.location}
-          </h3>
-          <p className="mt-0.5 text-xs uppercase tracking-wide text-[var(--ew-muted)]">
-            {pkg?.category || 'Uncategorized'}
-          </p>
-        </div>
+      <div className="min-w-0">
+        <h3 className="truncate text-body font-semibold text-[var(--ew-ink)]">
+          {pkg?.location}
+        </h3>
+        <p className="mt-0.5 text-xs uppercase tracking-wide text-[var(--ew-muted)]">
+          {pkg?.category || 'Uncategorized'}
+        </p>
       </div>
 
-      <div className="mt-4 flex items-center justify-between text-sm text-[var(--ew-muted)]">
-        <span>{pkg?.totalDays ? `${pkg.totalDays} days` : '-'}</span>
-        <span className="font-medium text-[var(--ew-ink)]">
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <span className="text-sm font-medium text-success">
           {pkg?.price != null ? `INR ${pkg.price}` : '-'}
         </span>
+        <button
+          type="button"
+          onClick={() => onView?.(pkg)}
+          className="rounded-xs bg-[#cc785c] px-4 py-2 text-body-sm font-medium text-white transition-colors hover:bg-[#b36a4e]"
+        >
+          View
+        </button>
       </div>
-
-      {pkg?.ratings != null && (
-        <p className="mt-1 text-xs text-[var(--ew-muted)]">Rating: {pkg.ratings}</p>
-      )}
     </div>
   )
 }
