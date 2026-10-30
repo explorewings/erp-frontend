@@ -100,8 +100,7 @@ function Packages() {
 
       {isLoading ? (
         <div
-          className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border text-sm text-[var(--ew-muted)]"
-          style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
+          className="flex min-h-0 flex-1 items-center justify-center text-sm text-[var(--ew-muted)]"
         >
           <Loader />
         </div>

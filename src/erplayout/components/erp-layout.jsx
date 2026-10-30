@@ -42,7 +42,7 @@ export default function ErpLayout() {
         <main
           className={`flex min-h-0 min-w-0 flex-1 flex-col px-4 ${
             isPackagesPage
-              ? 'overflow-hidden pt-6 sm:px-8 sm:pt-8'
+              ? 'overflow-hidden pt-6 sm:px-8 sm:pt-4'
               : 'overflow-y-auto py-6 sm:px-8 sm:py-8'
           }`}
         >

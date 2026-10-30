@@ -169,9 +169,6 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
             </button>
           </div>
 
-          {!collapsed && (
-            <p className="mt-2 hidden px-3 text-micro leading-relaxed text-muted lg:block">Console v0.1</p>
-          )}
         </div>
       </aside>
 
