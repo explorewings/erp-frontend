@@ -11,6 +11,7 @@ import PackageDrawer from '../components/packages-drawer.jsx'
 import PackageFooter from '../components/footer.jsx'
 
 const LIMIT = 20
+const ADDITIONAL_CATEGORIES = ['Kerala']
 
 function Packages() {
   const { token } = useAuth()
@@ -96,7 +97,10 @@ function Packages() {
             onChange={setCategory}
             options={[
               { value: 'all', label: 'All categories' },
-              ...categories.map((cat) => ({ value: cat, label: cat })),
+              ...[...new Set([...categories, ...ADDITIONAL_CATEGORIES])].map((cat) => ({
+                value: cat,
+                label: cat,
+              })),
             ]}
             iconOnly
           />

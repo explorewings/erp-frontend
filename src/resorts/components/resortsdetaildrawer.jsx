@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuChevronLeft, LuChevronRight, LuPen, LuTrash2, LuX } from 'react-icons/lu'
+import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
 import Loader from '../../appcomponents/loader.jsx'
 import Alert from '../../appcomponents/alert.jsx'
 import {
@@ -188,7 +189,9 @@ export default function ResortsDetailDrawer({
   const inputStyle = { borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }
 
   return createPortal(
-    <div className={`fixed bottom-0 right-0 top-16 z-50 w-full transition-transform duration-300 ease-out sm:w-[32rem] ${visible ? 'translate-x-0' : 'translate-x-full'}`}>
+    <>
+      <DrawerBackdrop />
+      <div className={`fixed bottom-0 right-0 top-16 z-50 w-full transition-transform duration-300 ease-out sm:w-[32rem] ${visible ? 'translate-x-0' : 'translate-x-full'}`}>
       <aside className="flex h-full w-full flex-col border-l border-[var(--ew-line)] bg-[var(--ew-surface)] shadow-panel" role="dialog" aria-modal="true" aria-labelledby="resort-details-title">
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--ew-line)] px-4">
           <h2 id="resort-details-title" className="text-title text-[var(--ew-ink)]">{isEditing ? 'Edit resort' : 'Resort details'}</h2>
@@ -204,9 +207,13 @@ export default function ResortsDetailDrawer({
         </header>
 
         {isLoading ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center"><Loader /></div>
-        ) : !isEditing ? (
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <Loader />
+          </div>
+        ) : (
+          <>
+          {!isEditing ? (
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
             {images.length > 0 && (
               <div className="space-y-3">
                 <div className="overflow-hidden rounded-control border" style={{ borderColor: 'var(--ew-line)' }}>
@@ -227,9 +234,9 @@ export default function ResortsDetailDrawer({
               <div><p className="text-micro font-semibold uppercase tracking-[0.08em] text-muted">Price</p><p className="mt-1 text-body-sm font-medium text-success">{details?.price != null ? `INR ${details.price}` : '-'}</p></div>
             </div>
             {details?.description && <div><p className="text-micro font-semibold uppercase tracking-[0.08em] text-muted">Description</p><p className="mt-1 whitespace-pre-line text-body-sm text-[var(--ew-ink)]">{details.description}</p></div>}
-          </div>
-        ) : (
-          <form id="edit-resort-form" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" onSubmit={handleSave}>
+            </div>
+          ) : (
+            <form id="edit-resort-form" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" onSubmit={handleSave}>
             <section>
               <p className="text-label font-medium text-[var(--ew-muted)]">Images</p>
               <div className="mt-2 space-y-3">
@@ -258,21 +265,24 @@ export default function ResortsDetailDrawer({
               <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="edit-resort-rating">Rating<input id="edit-resort-rating" type="number" min="0" max="5" step="0.1" className={`${inputClass} mt-1.5`} style={inputStyle} value={form.ratings} onChange={(event) => setForm((prev) => ({ ...prev, ratings: event.target.value }))} /></label>
             </div>
             {error && <div className="rounded-xs border px-3 py-2 text-body-sm" style={{ borderColor: 'rgba(194,65,12,.28)', background: 'rgba(194,65,12,.06)', color: 'var(--ew-accent-strong)' }}>{error}</div>}
-          </form>
-        )}
+            </form>
+          )}
 
-        <footer className="flex shrink-0 items-center justify-end gap-3 border-t border-[var(--ew-line)] px-4 py-2">
-          {isEditing ? (
-            <>
+          <footer className="flex shrink-0 items-center justify-end gap-3 border-t border-[var(--ew-line)] px-4 py-2">
+            {isEditing ? (
+              <>
               <button type="button" onClick={() => setIsEditing(false)} className="rounded-xs bg-gray-200 px-4 py-2 text-body-sm font-medium text-gray-700 hover:bg-gray-300">Cancel</button>
               <button type="submit" form="edit-resort-form" disabled={isSaving} className="rounded-xs bg-[#cc785c] px-4 py-2 text-body-sm font-medium text-white hover:bg-[#b36a4e] disabled:opacity-60">{isSaving ? 'Saving...' : 'Save changes'}</button>
-            </>
-          ) : <p className="text-body-sm font-semibold text-success">PRICE : INR {details?.price ?? '—'}</p>}
-        </footer>
-        {error && !isEditing && <div role="alert" className="border-t px-4 py-2 text-sm text-[var(--ew-accent-strong)]">{error}</div>}
+              </>
+            ) : <p className="text-body-sm font-semibold text-success">PRICE : INR {details?.price ?? '—'}</p>}
+          </footer>
+          {error && !isEditing && <div role="alert" className="border-t px-4 py-2 text-sm text-[var(--ew-accent-strong)]">{error}</div>}
+          </>
+        )}
         <Alert open={showDeleteAlert} title="Delete resort?" description={`"${details?.location || resort?.location || 'This resort'}" will be permanently deleted along with its unshared images. This action cannot be undone.`} confirmLabel="Delete resort" cancelLabel="Cancel" variant="destructive" isConfirming={isDeleting} onConfirm={handleDelete} onCancel={() => setShowDeleteAlert(false)} />
       </aside>
-    </div>,
+      </div>
+    </>,
     document.body,
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuImagePlus, LuX } from 'react-icons/lu'
+import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
 import { createPackage, deletePackageImage, uploadPackageImage } from '../api.js'
 import PackageCategoryTabs from './package-category-tabs.jsx'
 import Loader from '../../appcomponents/loader.jsx'
@@ -163,15 +164,17 @@ export default function AddPackageDrawer({ open, token, onClose, onCreated, onUp
   const fieldStyle = { borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }
 
   return createPortal(
-    <aside
-      className={`fixed bottom-0 right-0 top-16 z-50 flex w-full flex-col border-l border-[var(--ew-line)] shadow-panel transition-transform duration-300 ease-out sm:w-[32rem] ${
-        visible ? 'translate-x-0' : 'translate-x-full'
-      }`}
-      style={{ background: 'var(--ew-surface)' }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-package-title"
-    >
+    <>
+      <DrawerBackdrop />
+      <aside
+        className={`fixed bottom-0 right-0 top-16 z-50 flex w-full flex-col border-l border-[var(--ew-line)] shadow-panel transition-transform duration-300 ease-out sm:w-[32rem] ${
+          visible ? 'translate-x-0' : 'translate-x-full'
+        }`}
+        style={{ background: 'var(--ew-surface)' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-package-title"
+      >
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-line px-5">
         <div>
           <h2 id="create-package-title" className="text-title text-[var(--ew-ink)]">
@@ -435,7 +438,8 @@ export default function AddPackageDrawer({ open, token, onClose, onCreated, onUp
             </button>
         </div>
       </form>
-    </aside>,
+      </aside>
+    </>,
     document.body,
   )
 }

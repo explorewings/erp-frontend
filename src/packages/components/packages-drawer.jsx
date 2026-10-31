@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { LuChevronLeft, LuChevronRight, LuPen, LuTrash2, LuX } from 'react-icons/lu'
 import Loader from '../../appcomponents/loader.jsx'
 import Alert from '../../appcomponents/alert.jsx'
+import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
 import { deletePackage, deletePackageImage, fetchPackage, updatePackage, uploadPackageImage } from '../api.js'
 import PackageCategoryTabs from './package-category-tabs.jsx'
 
@@ -195,11 +196,13 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
   }
 
   return createPortal(
-    <div
-      className={`fixed bottom-0 right-0 top-16 z-50 w-full transition-transform duration-300 ease-out sm:w-[32rem] ${
-        visible ? 'translate-x-0' : 'translate-x-full'
-      }`}
-    >
+    <>
+      <DrawerBackdrop />
+      <div
+        className={`fixed bottom-0 right-0 top-16 z-50 w-full transition-transform duration-300 ease-out sm:w-[32rem] ${
+          visible ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
       <aside
         className="flex h-full w-full flex-col border-l border-[var(--ew-line)] bg-[var(--ew-surface)] shadow-panel"
       >
@@ -240,14 +243,14 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
           </div>
         </div>
 
-        {!isEditing ? (
-          <div className="flex-1 space-y-5 overflow-y-auto p-4">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader size={1.8} className="h-4 w-4" />
-              </div>
-            ) : (
-              <>
+        {isLoading ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <Loader />
+          </div>
+        ) : (
+          <>
+            {!isEditing ? (
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
                 {images.length > 0 && (
                   <div className="space-y-3">
                     <div className="overflow-hidden rounded-control border" style={{ borderColor: 'var(--ew-line)' }}>
@@ -313,11 +316,9 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
                     <p className="mt-1 whitespace-pre-line text-body-sm text-[var(--ew-ink)]">{details.description}</p>
                   </div>
                 )}
-              </>
-            )}
-          </div>
-        ) : (
-          <form id="edit-package-form" className="flex-1 space-y-4 overflow-y-auto p-4" onSubmit={handleSave}>
+              </div>
+            ) : (
+              <form id="edit-package-form" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" onSubmit={handleSave}>
             <div>
               <p className="text-label font-medium text-[var(--ew-muted)]">Images</p>
               <div className="mt-2 space-y-3">
@@ -485,12 +486,12 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
               </div>
             )}
 
-          </form>
-        )}
+              </form>
+            )}
 
-        <div className="flex items-center justify-end gap-3 border-t border-[var(--ew-line)] px-4 py-2">
-          {isEditing ? (
-            <>
+            <div className="flex items-center justify-end gap-3 border-t border-[var(--ew-line)] px-4 py-2">
+              {isEditing ? (
+                <>
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
@@ -506,13 +507,15 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
               >
                 {isSaving ? 'Saving...' : 'Save changes'}
               </button>
-            </>
-          ) : (
-            <p className="text-body-sm font-semibold text-success">
-              PRICE : INR {details?.price ?? '—'}
-            </p>
-          )}
-        </div>
+                </>
+              ) : (
+                <p className="text-body-sm font-semibold text-success">
+                  PRICE : INR {details?.price ?? '—'}
+                </p>
+              )}
+            </div>
+          </>
+        )}
         <Alert
           open={showDeleteAlert}
           title="Delete package?"
@@ -525,7 +528,8 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
           onCancel={() => setShowDeleteAlert(false)}
         />
       </aside>
-    </div>,
+      </div>
+    </>,
     document.body,
   )
 }

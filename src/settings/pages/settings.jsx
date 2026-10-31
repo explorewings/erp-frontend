@@ -25,6 +25,8 @@ export default function Settings() {
   const [toast, setToast] = useState(null)
   const [users, setUsers] = useState([])
   const [accessItems, setAccessItems] = useState([])
+  const [isLoadingAccessItems, setIsLoadingAccessItems] = useState(false)
+  const [accessItemsError, setAccessItemsError] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [permissionsUser, setPermissionsUser] = useState(null)
@@ -59,9 +61,25 @@ export default function Settings() {
 
   useEffect(() => {
     if (!token) return
+    let cancelled = false
+    setIsLoadingAccessItems(true)
+    setAccessItemsError(null)
     fetchAccessItems(token, 'menu')
-      .then((items) => setAccessItems(Array.isArray(items) ? items : []))
-      .catch(() => setAccessItems([]))
+      .then((items) => {
+        if (cancelled) return
+        setAccessItems(Array.isArray(items) ? items : [])
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setAccessItems([])
+        setAccessItemsError(err?.message || 'Unable to load menu permissions.')
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingAccessItems(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [token])
 
   useEffect(() => {
@@ -153,14 +171,16 @@ export default function Settings() {
     <section className={`ew-rise mx-auto max-w-6xl space-y-6 ${(isCreateOpen || selectedUser || selectedMenu) ? 'blur-sm pointer-events-none select-none' : ''}`}>
       <div className="flex items-center justify-between">
         {tabActions}
-        <button
-          type="button"
-          onClick={() => setIsCreateOpen(true)}
-          aria-label="Create user"
-          className="flex h-9 w-9 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
-        >
-          <LuPlus className="h-4 w-4" />
-        </button>
+        {activeTab === 'users' && (
+          <button
+            type="button"
+            onClick={() => setIsCreateOpen(true)}
+            aria-label="Create user"
+            className="flex h-9 w-9 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+          >
+            <LuPlus className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {activeTab === 'users' && (
@@ -261,6 +281,9 @@ export default function Settings() {
     <CreateUserModal
       open={isCreateOpen}
       token={token}
+      accessItems={accessItems}
+      accessItemsLoading={isLoadingAccessItems}
+      accessItemsError={accessItemsError}
       onClose={() => setIsCreateOpen(false)}
       onCreated={(created) => {
         setUsers((prev) => [created, ...prev])

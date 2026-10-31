@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuX } from 'react-icons/lu'
+import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
 import Loader from '../../appcomponents/loader.jsx'
 import { createResort, uploadResortImage } from '../api.js'
 
@@ -116,13 +117,15 @@ export default function AddResorts({ open, token, onClose, onCreated, onUpdated 
   const fieldStyle = { borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }
 
   return createPortal(
-    <aside
-      className={`fixed bottom-0 right-0 top-16 z-50 flex w-full flex-col border-l border-[var(--ew-line)] shadow-panel transition-transform duration-300 ease-out sm:w-[32rem] ${visible ? 'translate-x-0' : 'translate-x-full'}`}
-      style={{ background: 'var(--ew-surface)' }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-resort-title"
-    >
+    <>
+      <DrawerBackdrop />
+      <aside
+        className={`fixed bottom-0 right-0 top-16 z-50 flex w-full flex-col border-l border-[var(--ew-line)] shadow-panel transition-transform duration-300 ease-out sm:w-[32rem] ${visible ? 'translate-x-0' : 'translate-x-full'}`}
+        style={{ background: 'var(--ew-surface)' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-resort-title"
+      >
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-line px-5">
         <div>
           <h2 id="create-resort-title" className="text-title text-[var(--ew-ink)]">Create resort</h2>
@@ -184,11 +187,12 @@ export default function AddResorts({ open, token, onClose, onCreated, onUpdated 
         <footer className="flex shrink-0 justify-end gap-2 border-t border-[var(--ew-line)] px-5 py-3">
           <button type="button" onClick={closeDrawer} disabled={busy} className="rounded-xs border px-4 py-2 text-body-sm font-medium text-[var(--ew-ink)] hover:bg-ground disabled:opacity-60" style={{ borderColor: 'var(--ew-line)' }}>Cancel</button>
           <button type="submit" disabled={busy} className="rounded-xs bg-[#cc785c] px-4 py-2 text-body-sm font-medium text-white hover:bg-[#b36a4e] disabled:opacity-60">
-            {busy ? <span className="inline-flex items-center gap-2"><Loader size={1} className="h-4 w-4" />{created ? 'Retrying uploads...' : 'Creating...'}</span> : created ? 'Retry image uploads' : 'Create resort'}
+            {busy ? <span className="inline-flex items-center gap-2"><Loader size={1} className="h-4 w-4" />{created ? 'Uploading images...' : 'Creating...'}</span> : created ? 'Retry image uploads' : 'Create resort'}
           </button>
         </footer>
       </form>
-    </aside>,
+      </aside>
+    </>,
     document.body,
   )
 }
