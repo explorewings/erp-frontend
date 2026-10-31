@@ -28,3 +28,73 @@ export async function fetchPackageCategories(token) {
   }
   return Array.isArray(data) ? data : []
 }
+
+export async function fetchPackage(token, id) {
+  const response = await fetch(`${API_BASE_URL}/packages/${id}`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message = (Array.isArray(data?.message) ? data.message[0] : data?.message) ?? 'Unable to load package details.'
+    throw new Error(message)
+  }
+  return data
+}
+
+export async function updatePackage(token, id, payload) {
+  const response = await fetch(`${API_BASE_URL}/packages/${id}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message = (Array.isArray(data?.message) ? data.message[0] : data?.message) || 'Unable to update package.'
+    throw new Error(message)
+  }
+  return data
+}
+
+export async function uploadPackageImage(token, id, slot, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await fetch(`${API_BASE_URL}/packages/${id}/images/${slot}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message = (Array.isArray(data?.message) ? data.message[0] : data?.message) || 'Unable to upload image.'
+    throw new Error(message)
+  }
+  return data
+}
+
+export async function deletePackageImage(token, id, slot) {
+  const response = await fetch(`${API_BASE_URL}/packages/${id}/images/${slot}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message = (Array.isArray(data?.message) ? data.message[0] : data?.message) || 'Unable to remove image.'
+    throw new Error(message)
+  }
+  return data
+}
+
+
+export async function createPackage(token, payload) {
+  const response = await fetch(`${API_BASE_URL}/packages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message = (Array.isArray(data?.message) ? data.message[0] : data?.message) || 'Unable to create package.'
+    throw new Error(message)
+  }
+  return data
+}
