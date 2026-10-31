@@ -67,7 +67,7 @@ export default function UserMenu() {
           </span>
         </span>
         <ChevronIcon
-          className={`h-4 w-4 shrink-0 text-muted transition-transform duration-150 ${
+          className={`hidden h-4 w-4 shrink-0 text-muted transition-transform duration-150 sm:block ${
             open ? 'rotate-90' : ''
           }`}
         />
@@ -76,7 +76,7 @@ export default function UserMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-40 mt-2 w-64 rounded-tile border border-line bg-surface p-1.5 shadow-panel"
+          className="absolute left-0 z-40 mt-3 w-64 rounded-tile border border-line bg-surface p-1.5 shadow-panel sm:left-auto sm:right-0"
         >
           <div className="px-3 py-2.5">
             <p className="truncate text-body-sm font-semibold text-ink">{user?.username}</p>

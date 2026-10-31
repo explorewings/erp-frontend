@@ -13,16 +13,18 @@ export default function ErpTopbar({ onMenu }) {
         type="button"
         onClick={onMenu}
         aria-label="Open navigation"
-        className="flex h-9 w-9 items-center justify-center rounded-control text-muted outline-none transition-colors hover:bg-ground hover:text-ink focus-visible:ring-4 focus-visible:ring-accent/15 lg:hidden"
+        className="order-3 ml-auto flex h-9 w-9 items-center justify-center rounded-control text-muted outline-none transition-colors hover:bg-ground hover:text-ink focus-visible:ring-4 focus-visible:ring-accent/15 lg:order-none lg:ml-0 lg:hidden"
       >
         <MenuIcon className="h-5 w-5" />
       </button>
 
-      <p className="min-w-0 flex-1 truncate text-body font-semibold tracking-[-0.01em] text-ink">
+      <p className="order-2 min-w-0 flex-1 truncate text-center text-body font-semibold tracking-[-0.01em] text-ink lg:order-none lg:text-left">
         {section}
       </p>
 
-      <UserMenu />
+      <div className="order-1 lg:order-none">
+        <UserMenu />
+      </div>
     </header>
   )
 }
