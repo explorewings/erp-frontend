@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuChevronLeft, LuChevronRight, LuPen, LuX } from 'react-icons/lu'
+import { LuChevronLeft, LuChevronRight, LuPen, LuTrash2, LuX } from 'react-icons/lu'
 import Loader from '../../appcomponents/loader.jsx'
-import { deletePackageImage, fetchPackage, updatePackage, uploadPackageImage } from '../api.js'
+import Alert from '../../appcomponents/alert.jsx'
+import { deletePackage, deletePackageImage, fetchPackage, updatePackage, uploadPackageImage } from '../api.js'
+import PackageCategoryTabs from './package-category-tabs.jsx'
 
-export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onNotify }) {
+export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onNotify, onDeleted }) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [visible, setVisible] = useState(false)
   const onCloseRef = useRef(onClose)
@@ -25,6 +27,8 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
   const [uploadingSlot, setUploadingSlot] = useState(null)
   const [removingSlot, setRemovingSlot] = useState(null)
   const [error, setError] = useState(null)
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     setActiveIndex(0)
@@ -174,6 +178,22 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
     }
   }
 
+  const handleDeletePackage = async () => {
+    if (!pkg?.id || !token) return
+    setIsDeleting(true)
+    setError(null)
+    try {
+      const result = await deletePackage(token, pkg.id)
+      onDeleted?.(pkg.id, result?.cleanupWarnings || [])
+      closeDrawer()
+    } catch (err) {
+      setError(err?.message || 'Unable to delete package.')
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteAlert(false)
+    }
+  }
+
   return createPortal(
     <div
       className={`fixed bottom-0 right-0 top-16 z-50 w-full transition-transform duration-300 ease-out sm:w-[32rem] ${
@@ -184,17 +204,30 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
         className="flex h-full w-full flex-col border-l border-[var(--ew-line)] bg-[var(--ew-surface)] shadow-panel"
       >
         <div className="flex h-12 items-center justify-between border-b border-[var(--ew-line)] px-4">
-          <h2 className="text-title text-[var(--ew-ink)]">{isEditing ? 'Edit package' : (details?.location || 'Package details')}</h2>
+          <h2 className="text-title text-[var(--ew-ink)]">
+            {isEditing ? 'Edit package' : 'Package details'}
+          </h2>
           <div className="flex items-center gap-2">
             {!isEditing && (
-              <button
-                type="button"
-                onClick={() => setIsEditing(true)}
-                aria-label="Edit package"
-                className="flex h-8 w-8 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e] focus-visible:ring-4 focus-visible:ring-accent/15"
-              >
-                <LuPen className="h-4 w-4" />
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteAlert(true)}
+                  aria-label="Delete package"
+                  disabled={isLoading || isDeleting}
+                  className="flex h-8 w-8 items-center justify-center rounded-xs bg-danger text-white transition-colors hover:bg-danger-strong focus-visible:ring-4 focus-visible:ring-danger/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <LuTrash2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  aria-label="Edit package"
+                  className="flex h-8 w-8 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e] focus-visible:ring-4 focus-visible:ring-accent/15"
+                >
+                  <LuPen className="h-4 w-4" />
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -253,19 +286,18 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
                 )}
 
                 <div>
+                  <p className="text-micro font-semibold uppercase tracking-[0.08em] text-muted">Location</p>
+                  <p className="mt-1 text-body text-[var(--ew-ink)]">{details?.location || '-'}</p>
+                </div>
+
+                <div>
                   <p className="text-micro font-semibold uppercase tracking-[0.08em] text-muted">Category</p>
                   <p className="mt-1 text-body text-[var(--ew-ink)]">{details?.category || 'Uncategorized'}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-micro font-semibold uppercase tracking-[0.08em] text-muted">Duration</p>
-                    <p className="mt-1 text-body-sm text-[var(--ew-ink)]">{details?.totalDays ? `${details.totalDays} days` : '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-micro font-semibold uppercase tracking-[0.08em] text-muted">Price</p>
-                    <p className="mt-1 text-body-sm font-medium text-success">{details?.price != null ? `INR ${details.price}` : '-'}</p>
-                  </div>
+                <div>
+                  <p className="text-micro font-semibold uppercase tracking-[0.08em] text-muted">Duration</p>
+                  <p className="mt-1 text-body-sm text-[var(--ew-ink)]">{details?.totalDays ? `${details.totalDays} days` : '-'}</p>
                 </div>
 
                 {details?.ratings != null && (
@@ -286,93 +318,6 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
           </div>
         ) : (
           <form id="edit-package-form" className="flex-1 space-y-4 overflow-y-auto p-4" onSubmit={handleSave}>
-            <div>
-              <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-location">
-                Location
-              </label>
-              <input
-                id="ep-location"
-                className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
-                style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
-                value={form.location}
-                onChange={(event) => setForm((prev) => ({ ...prev, location: event.target.value }))}
-              />
-            </div>
-
-            <div>
-              <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-description">
-                Description
-              </label>
-              <textarea
-                id="ep-description"
-                rows="3"
-                className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
-                style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
-                value={form.description}
-                onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-              />
-            </div>
-
-            <div>
-              <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-category">
-                Category
-              </label>
-              <input
-                id="ep-category"
-                className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
-                style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
-                value={form.category}
-                onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-days">
-                  Days
-                </label>
-                <input
-                  id="ep-days"
-                  type="number"
-                  className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
-                  style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
-                  value={form.totalDays}
-                  onChange={(event) => setForm((prev) => ({ ...prev, totalDays: event.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-price">
-                  Price
-                </label>
-                <input
-                  id="ep-price"
-                  type="number"
-                  className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
-                  style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
-                  value={form.price}
-                  onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-rating">
-                  Rating
-                </label>
-                <input
-                  id="ep-rating"
-                  type="number"
-                  step="0.1"
-                  className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
-                  style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
-                  value={form.ratings}
-                  onChange={(event) => setForm((prev) => ({ ...prev, ratings: event.target.value }))}
-                />
-              </div>
-            </div>
-
-
-
-
-
             <div>
               <p className="text-label font-medium text-[var(--ew-muted)]">Images</p>
               <div className="mt-2 space-y-3">
@@ -438,6 +383,95 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
               </div>
             </div>
 
+
+            <div>
+              <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-location">
+                Location
+              </label>
+              <input
+                id="ep-location"
+                className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
+                style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
+                value={form.location}
+                onChange={(event) => setForm((prev) => ({ ...prev, location: event.target.value }))}
+              />
+            </div>
+
+            <div>
+              <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-description">
+                Description
+              </label>
+              <textarea
+                id="ep-description"
+                rows="3"
+                className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
+                style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
+                value={form.description}
+                onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+              />
+            </div>
+
+            <div>
+              <label
+                id="ep-category-label"
+                className="mb-2 block text-label font-medium text-[var(--ew-muted)]"
+              >
+                Category
+              </label>
+              <PackageCategoryTabs
+                value={form.category}
+                labelledBy="ep-category-label"
+                onChange={(category) => setForm((prev) => ({ ...prev, category }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-days">
+                  Days
+                </label>
+                <input
+                  id="ep-days"
+                  type="number"
+                  className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
+                  style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
+                  value={form.totalDays}
+                  onChange={(event) => setForm((prev) => ({ ...prev, totalDays: event.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-price">
+                  Price
+                </label>
+                <input
+                  id="ep-price"
+                  type="number"
+                  className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
+                  style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
+                  value={form.price}
+                  onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-label font-medium text-[var(--ew-muted)]" htmlFor="ep-rating">
+                  Rating
+                </label>
+                <input
+                  id="ep-rating"
+                  type="number"
+                  step="0.1"
+                  className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
+                  style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
+                  value={form.ratings}
+                  onChange={(event) => setForm((prev) => ({ ...prev, ratings: event.target.value }))}
+                />
+              </div>
+            </div>
+
+
+
+
+
             {error && (
               <div
                 className="rounded-xs border px-3 py-2 text-body-sm"
@@ -454,14 +488,13 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
           </form>
         )}
 
-        <div className="flex items-center justify-end gap-2 border-t border-[var(--ew-line)] px-4 py-2">
+        <div className="flex items-center justify-end gap-3 border-t border-[var(--ew-line)] px-4 py-2">
           {isEditing ? (
             <>
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
-                className="rounded-xs border px-4 py-2 text-body-sm font-medium text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
-                style={{ borderColor: 'var(--ew-line)' }}
+                className="rounded-xs bg-gray-200 px-4 py-2 text-body-sm font-medium text-gray-700 transition-colors hover:bg-gray-300"
               >
                 Cancel
               </button>
@@ -475,16 +508,22 @@ export default function PackageDrawer({ open, pkg, token, onClose, onUpdate, onN
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={closeDrawer}
-              className="rounded-xs border px-4 py-2 text-body-sm font-medium text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
-              style={{ borderColor: 'var(--ew-line)' }}
-            >
-              Close
-            </button>
+            <p className="text-body-sm font-semibold text-success">
+              PRICE : INR {details?.price ?? '—'}
+            </p>
           )}
         </div>
+        <Alert
+          open={showDeleteAlert}
+          title="Delete package?"
+          description={`"${details?.location || pkg?.location || 'This package'}" will be permanently deleted along with its unshared images. This action cannot be undone.`}
+          confirmLabel="Delete package"
+          cancelLabel="Cancel"
+          variant="destructive"
+          isConfirming={isDeleting}
+          onConfirm={handleDeletePackage}
+          onCancel={() => setShowDeleteAlert(false)}
+        />
       </aside>
     </div>,
     document.body,

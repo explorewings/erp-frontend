@@ -5,7 +5,7 @@ import Loader from '../../appcomponents/loader.jsx'
 import Toast from '../../appcomponents/toast.jsx'
 import Select from '../../appcomponents/select.jsx'
 import { LuPlus } from 'react-icons/lu'
-import AddPackageModal from '../components/add-package-modal.jsx'
+import AddPackageDrawer from '../components/add-package-drawer.jsx'
 import PackageCard from '../components/package-card.jsx'
 import PackageDrawer from '../components/packages-drawer.jsx'
 import PackageFooter from '../components/footer.jsx'
@@ -160,7 +160,7 @@ function Packages() {
           />
         </div>
       )}
-    <AddPackageModal
+    <AddPackageDrawer
       open={isCreateOpen}
       token={token}
       onClose={() => setIsCreateOpen(false)}
@@ -168,6 +168,9 @@ function Packages() {
         setItems((prev) => [created, ...prev])
         setTotal((prev) => prev + 1)
         setToast({ message: 'Package created', type: 'success' })
+      }}
+      onUpdated={(updated) => {
+        setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
       }}
     />
     <PackageDrawer
@@ -180,6 +183,19 @@ function Packages() {
         setSelectedPackage(updated)
       }}
       onNotify={(message) => setToast({ message, type: 'success' })}
+      onDeleted={(deletedId, cleanupWarnings) => {
+        setItems((prev) => prev.filter((item) => item.id !== deletedId))
+        const nextTotal = Math.max(0, total - 1)
+        const nextTotalPages = Math.max(1, Math.ceil(nextTotal / LIMIT))
+        setTotal(nextTotal)
+        setPage((currentPage) => Math.min(currentPage, nextTotalPages))
+        setSelectedPackage(null)
+        setToast(
+          cleanupWarnings.length > 0
+            ? { message: `Package deleted. ${cleanupWarnings.join(' ')}`, type: 'error' }
+            : { message: 'Package deleted', type: 'success' },
+        )
+      }}
     />
     </section>
     <Toast open={!!toast} message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
