@@ -7,7 +7,7 @@ import { HOME_PATH } from './erplayout/nav.js'
 import Calendar from './erplayout/pages/calendar.jsx'
 import Resorts from './resorts/pages/resorts.jsx'
 import Packages from './packages/pages/packages.jsx'
-import Clients from './erplayout/pages/clients.jsx'
+import Clients from './clients/pages/clients.jsx'
 import Crm from './erplayout/pages/crm.jsx'
 import Settings from './settings/pages/settings.jsx'
 

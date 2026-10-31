@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { checkUserAvailability, createUser } from '../api.js'
 import Loader from '../../appcomponents/loader.jsx'
 import { EyeIcon, EyeOffIcon } from '../../components/icons.jsx'
@@ -34,8 +35,31 @@ export default function CreateUserModal({
   const [passwordRequirementsError, setPasswordRequirementsError] = useState(null)
   const [step, setStep] = useState(1)
   const [selectedCodes, setSelectedCodes] = useState([])
+  const [horizontalOffset, setHorizontalOffset] = useState(0)
   const permissionsInitializedRef = useRef(false)
   onCloseRef.current = onClose
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const main = document.querySelector('main')
+    if (!main) return undefined
+
+    const updateOffset = () => {
+      const bounds = main.getBoundingClientRect()
+      setHorizontalOffset(bounds.left + bounds.width / 2 - window.innerWidth / 2)
+    }
+
+    updateOffset()
+    const observer = new ResizeObserver(updateOffset)
+    observer.observe(main)
+    window.addEventListener('resize', updateOffset)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateOffset)
+    }
+  }, [open])
 
   useEffect(() => {
     if (open) {
@@ -247,16 +271,20 @@ export default function CreateUserModal({
     background: 'var(--ew-surface)',
   }
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-user-title"
     >
       <div
-        className="relative flex h-[min(90vh,28rem)] w-full max-w-md flex-col rounded-control border p-6 shadow-2xl ring-1 ring-[var(--ew-line)]"
-        style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
+        className="relative flex h-[min(28rem,calc(100dvh-2rem))] max-h-[90dvh] w-full max-w-md flex-col rounded-control border p-6 shadow-2xl ring-1 ring-[var(--ew-line)]"
+        style={{
+          borderColor: 'var(--ew-line)',
+          background: 'var(--ew-surface)',
+          transform: `translateX(${horizontalOffset}px)`,
+        }}
       >
         <div className="flex shrink-0 items-center justify-between gap-4">
           <div>
@@ -533,6 +561,7 @@ export default function CreateUserModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
