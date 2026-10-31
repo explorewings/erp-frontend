@@ -2,10 +2,43 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuCheck, LuCircleAlert, LuX } from 'react-icons/lu'
 
-export default function Toast({ open, message, type = 'success', onClose, duration = 3000 }) {
+export default function Toast({
+  open,
+  message,
+  type = 'success',
+  onClose,
+  duration = 3000,
+  centerWithinMain = false,
+}) {
   const [visible, setVisible] = useState(false)
+  const [mainCenterX, setMainCenterX] = useState(null)
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
+
+  useEffect(() => {
+    if (!centerWithinMain) {
+      setMainCenterX(null)
+      return undefined
+    }
+
+    const main = document.querySelector('main')
+    if (!main) return undefined
+
+    const updateCenter = () => {
+      const bounds = main.getBoundingClientRect()
+      setMainCenterX(bounds.left + bounds.width / 2)
+    }
+
+    updateCenter()
+    const observer = new ResizeObserver(updateCenter)
+    observer.observe(main)
+    window.addEventListener('resize', updateCenter)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateCenter)
+    }
+  }, [centerWithinMain])
 
   useEffect(() => {
     if (!open || !message) {
@@ -38,7 +71,7 @@ export default function Toast({ open, message, type = 'success', onClose, durati
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
       style={{
-        left: '50%',
+        left: mainCenterX === null ? '50%' : `${mainCenterX}px`,
         bottom: '1.5rem',
         transform: visible ? 'translateX(-50%)' : 'translate(-50%, 1rem)',
         borderColor: 'var(--ew-line)',

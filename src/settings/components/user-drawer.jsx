@@ -296,11 +296,16 @@ export default function UserDrawer({ user, open, token, onClose, onUpdate, onNot
                 id="eu-password"
                 type="password"
                 minLength={6}
+                pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{6,}"
+                title="Use at least 6 characters, including uppercase, lowercase, a number, and a special character."
                 className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
                 style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
                 value={form.password}
                 onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
               />
+              <p className="mt-1 text-xs text-[var(--ew-muted)]">
+                If provided, use at least 6 characters with uppercase, lowercase, a number, and a special character.
+              </p>
             </div>
 
             {error && (

@@ -92,6 +92,34 @@ export async function createUser(token, payload) {
     const message =
       (Array.isArray(data?.message) ? data.message[0] : data?.message) ??
       'Unable to create user.'
+    const error = new Error(message)
+    error.code = data?.code
+    error.field = data?.field
+    throw error
+  }
+  return data
+}
+
+export async function checkUserAvailability(token, payload) {
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/settings/users/check-availability`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+  } catch {
+    throw new Error('Cannot reach the server. Is the API running?')
+  }
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message =
+      (Array.isArray(data?.message) ? data.message[0] : data?.message) ??
+      'Unable to check username and email availability.'
     throw new Error(message)
   }
   return data

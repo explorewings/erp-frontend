@@ -261,7 +261,13 @@ export default function Settings() {
       onClose={() => setSelectedMenu(null)}
       onSaved={(message) => setToast({ message, type: 'success' })}
     />
-    <Toast open={!!toast} message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
+    <Toast
+      open={!!toast}
+      message={toast?.message}
+      type={toast?.type}
+      onClose={() => setToast(null)}
+      centerWithinMain
+    />
     <UserDrawer
       user={selectedUser}
       open={!!selectedUser}
@@ -289,6 +295,7 @@ export default function Settings() {
         setUsers((prev) => [created, ...prev])
         setToast({ message: 'User created', type: 'success' })
       }}
+      onNotify={(message, type) => setToast({ message, type })}
     />
     </>
   )

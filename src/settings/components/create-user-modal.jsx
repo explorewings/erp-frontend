@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createUser } from '../api.js'
+import { checkUserAvailability, createUser } from '../api.js'
 import Loader from '../../appcomponents/loader.jsx'
 import { EyeIcon, EyeOffIcon } from '../../components/icons.jsx'
 import { NAV_ITEMS } from '../../erplayout/nav.js'
@@ -17,6 +17,7 @@ export default function CreateUserModal({
   accessItemsError = null,
   onClose,
   onCreated,
+  onNotify,
 }) {
   const [form, setForm] = useState({
     username: '',
@@ -25,10 +26,12 @@ export default function CreateUserModal({
     password: '',
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false)
   const [error, setError] = useState(null)
   const onCloseRef = useRef(onClose)
   const ignorePopRef = useRef(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [passwordRequirementsError, setPasswordRequirementsError] = useState(null)
   const [step, setStep] = useState(1)
   const [selectedCodes, setSelectedCodes] = useState([])
   const permissionsInitializedRef = useRef(false)
@@ -40,6 +43,7 @@ export default function CreateUserModal({
       setStep(1)
       setSelectedCodes([])
       setShowPassword(false)
+      setPasswordRequirementsError(null)
       permissionsInitializedRef.current = false
       setError(null)
     } else {
@@ -129,9 +133,50 @@ export default function CreateUserModal({
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (isCheckingAvailability) return
+
     if (step === 1) {
-      setStep(2)
+      const missingPasswordRequirements = [
+        ...(form.password.length < 6 ? ['at least 6 characters'] : []),
+        ...(!/[a-z]/.test(form.password) ? ['a lowercase letter'] : []),
+        ...(!/[A-Z]/.test(form.password) ? ['an uppercase letter'] : []),
+        ...(!/\d/.test(form.password) ? ['a number'] : []),
+        ...(!/[^A-Za-z0-9]/.test(form.password) ? ['a special character'] : []),
+      ]
+      if (missingPasswordRequirements.length > 0) {
+        const missingList =
+          missingPasswordRequirements.length === 1
+            ? missingPasswordRequirements[0]
+            : `${missingPasswordRequirements.slice(0, -1).join(', ')} and ${
+                missingPasswordRequirements[missingPasswordRequirements.length - 1]
+              }`
+        setPasswordRequirementsError(`Password is missing ${missingList}.`)
+        return
+      }
+      setPasswordRequirementsError(null)
       setError(null)
+      setIsCheckingAvailability(true)
+      try {
+        const availability = await checkUserAvailability(token, {
+          username: form.username.trim(),
+          email: form.email.trim(),
+        })
+        if (availability.usernameExists || availability.emailExists) {
+          const message =
+            availability.usernameExists && availability.emailExists
+              ? 'username and mail already used'
+              : availability.usernameExists
+                ? 'username already used'
+                : 'mail already used'
+          onNotify?.(message, 'error')
+          return
+        }
+        setStep(2)
+      } catch (err) {
+        setError(err?.message || 'Unable to check username and email availability.')
+      } finally {
+        setIsCheckingAvailability(false)
+      }
       return
     }
 
@@ -153,7 +198,15 @@ export default function CreateUserModal({
       onCreated(created)
       closeOverlay()
     } catch (err) {
-      setError(err?.message || 'Unable to create user.')
+      if (err?.field === 'username') {
+        onNotify?.('username already used', 'error')
+        setStep(1)
+      } else if (err?.field === 'email') {
+        onNotify?.('mail already used', 'error')
+        setStep(1)
+      } else {
+        setError(err?.message || 'Unable to create user.')
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -202,7 +255,7 @@ export default function CreateUserModal({
       aria-labelledby="create-user-title"
     >
       <div
-        className="relative flex h-[19rem] max-h-[90vh] w-full max-w-md flex-col rounded-control border p-6 shadow-2xl ring-1 ring-[var(--ew-line)]"
+        className="relative flex h-[min(90vh,28rem)] w-full max-w-md flex-col rounded-control border p-6 shadow-2xl ring-1 ring-[var(--ew-line)]"
         style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
       >
         <div className="flex shrink-0 items-center justify-between gap-4">
@@ -309,12 +362,14 @@ export default function CreateUserModal({
                     <input
                       id="cu-password"
                       type={showPassword ? 'text' : 'password'}
-                      required
-                      minLength={6}
+                      title="Use at least 6 characters, including uppercase, lowercase, a number, and a special character."
                       className={`${fieldClass} pr-11`}
                       style={fieldStyle}
                       value={form.password}
-                      onChange={handleChange('password')}
+                      onChange={(event) => {
+                        setForm((prev) => ({ ...prev, password: event.target.value }))
+                        if (passwordRequirementsError) setPasswordRequirementsError(null)
+                      }}
                     />
                     <button
                       type="button"
@@ -326,6 +381,18 @@ export default function CreateUserModal({
                       {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                     </button>
                   </div>
+                  <p
+                    className={`mt-3 text-xs ${
+                      passwordRequirementsError
+                        ? 'text-[var(--ew-accent-strong)]'
+                        : 'text-[var(--ew-muted)]'
+                    }`}
+                    role={passwordRequirementsError ? 'alert' : undefined}
+                  >
+                    {passwordRequirementsError
+                      ? passwordRequirementsError
+                      : 'Use at least 6 characters with uppercase, lowercase, a number, and a special character.'}
+                  </p>
                 </div>
               </div>
             ) : (
@@ -355,7 +422,7 @@ export default function CreateUserModal({
                   </div>
                 ) : (
                   <div className="flex min-h-0 flex-1 flex-col gap-2">
-                    <div className="max-h-[300px] min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                       {availableAccessItems.map((item) => {
                         const menu = NAV_ITEMS.find((entry) => entry.key === item.code)
                         const Icon = menu?.Icon
@@ -419,39 +486,50 @@ export default function CreateUserModal({
             </div>
           )}
 
-          <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-[var(--ew-line)] pt-4">
-            <button
-              type="button"
-              onClick={
-                step === 2
-                  ? () => {
-                      setStep(1)
-                      setError(null)
-                    }
-                  : closeOverlay
-              }
-              disabled={isSubmitting}
-              className="rounded-xs border px-4 py-2 text-body-sm font-medium text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
-              style={{ borderColor: 'var(--ew-line)' }}
-            >
-              {step === 2 ? 'Back' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || (step === 2 && !canCreate)}
-              className="rounded-xs bg-[#cc785c] px-4 py-2 text-body-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-60"
-            >
-              {isSubmitting ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader size={1} className="h-4 w-4" />
-                  Creating user...
-                </span>
-              ) : step === 1 ? (
-                'Next'
-              ) : (
-                'Create user'
-              )}
-            </button>
+          <div className="mt-4 flex shrink-0 items-center justify-between gap-2 border-t border-[var(--ew-line)] pt-4">
+            <span className="text-xs text-[var(--ew-muted)]" aria-live="polite">
+              Step {step}/2
+            </span>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={
+                  step === 2
+                    ? () => {
+                        setStep(1)
+                        setError(null)
+                      }
+                    : closeOverlay
+                }
+                disabled={isSubmitting}
+                className="rounded-xs border px-4 py-2 text-body-sm font-medium text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
+                style={{ borderColor: 'var(--ew-line)' }}
+              >
+                {step === 2 ? 'Back' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  isSubmitting ||
+                  isCheckingAvailability ||
+                  (step === 2 && !canCreate)
+                }
+                className="rounded-xs bg-[#cc785c] px-4 py-2 text-body-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-60"
+              >
+                {isSubmitting ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader size={1} className="h-4 w-4" />
+                    Creating user...
+                  </span>
+                ) : isCheckingAvailability ? (
+                  'Checking...'
+                ) : step === 1 ? (
+                  'Next'
+                ) : (
+                  'Create user'
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
