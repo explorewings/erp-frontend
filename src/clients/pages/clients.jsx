@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { LuPlus } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
+import Alert from '../../appcomponents/alert.jsx'
 import Loader from '../../appcomponents/loader.jsx'
 import Toast from '../../appcomponents/toast.jsx'
 import AddClient from '../components/add-client.jsx'
+import ClientDetails from '../components/client-details.jsx'
 import ClientsTable from '../components/clients-table.jsx'
-import { fetchClients } from '../api.js'
+import { deleteClient, fetchClients } from '../api.js'
 
 const LIMIT = 100
 
@@ -21,6 +23,9 @@ export default function Clients() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [selectedClient, setSelectedClient] = useState(null)
+  const [clientToDelete, setClientToDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [toast, setToast] = useState(null)
   const canCreate = user?.role === 'superadmin' || user?.role === 'superuser'
 
@@ -56,6 +61,32 @@ export default function Clients() {
     }
   }, [token, debouncedSearch, page, refreshKey])
 
+  const handleDeleteClient = async () => {
+    if (!clientToDelete || !token) return
+    setIsDeleting(true)
+    try {
+      await deleteClient(token, clientToDelete.id)
+      setItems((current) => current.filter((client) => client.id !== clientToDelete.id))
+      const nextTotal = Math.max(0, total - 1)
+      const nextTotalPages = Math.max(1, Math.ceil(nextTotal / LIMIT))
+      setTotal(nextTotal)
+      setTotalPages(nextTotalPages)
+      if (page > nextTotalPages) setPage(nextTotalPages)
+      if (selectedClient?.id === clientToDelete.id) setSelectedClient(null)
+      setToast({ message: 'Client deleted', type: 'success' })
+      setClientToDelete(null)
+    } catch (err) {
+      setToast({ message: err?.message || 'Unable to delete client.', type: 'error' })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleUpdateClient = (updatedClient) => {
+    setItems((current) => current.map((client) => client.id === updatedClient.id ? updatedClient : client))
+    setSelectedClient(updatedClient)
+  }
+
   return (
     <>
       <section className="relative flex min-h-0 flex-1 flex-col gap-4">
@@ -82,7 +113,7 @@ export default function Clients() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-6xl p-4">
+          <div className="mx-auto w-full max-w-6xl p-0 pb-28 md:p-4 md:pb-4">
             <ClientsTable
               clients={items}
               loading={loading}
@@ -92,6 +123,9 @@ export default function Clients() {
               total={total}
               onPrevious={() => setPage((current) => Math.max(1, current - 1))}
               onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
+              onView={setSelectedClient}
+              onDelete={setClientToDelete}
+              canManage={canCreate}
             />
           </div>
         </div>
@@ -107,6 +141,26 @@ export default function Clients() {
           }}
         />
       </section>
+      <ClientDetails
+        client={selectedClient}
+        token={token}
+        onClose={() => setSelectedClient(null)}
+        onDelete={setClientToDelete}
+        onUpdated={handleUpdateClient}
+        onNotify={(message) => setToast({ message, type: 'success' })}
+        canDelete={canCreate}
+      />
+      <Alert
+        open={!!clientToDelete}
+        title="Delete client?"
+        description={`This will permanently delete ${clientToDelete?.name || 'this client'} and cannot be undone.`}
+        confirmLabel="Delete"
+        isConfirming={isDeleting}
+        onConfirm={handleDeleteClient}
+        onCancel={() => {
+          if (!isDeleting) setClientToDelete(null)
+        }}
+      />
       <Toast open={!!toast} message={toast?.message} type={toast?.type} onClose={() => setToast(null)} centerWithinMain />
     </>
   )

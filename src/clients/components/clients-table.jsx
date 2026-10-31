@@ -1,3 +1,8 @@
+import { LuTrash2 } from 'react-icons/lu'
+import { MdKeyboardDoubleArrowRight } from 'react-icons/md'
+import { createPortal } from 'react-dom'
+import PackageFooter from '../../packages/components/footer.jsx'
+
 export default function ClientsTable({
   clients = [],
   loading = false,
@@ -7,6 +12,9 @@ export default function ClientsTable({
   total = 0,
   onPrevious,
   onNext,
+  onView,
+  onDelete,
+  canManage = false,
 }) {
   const createdDate = (value) =>
     value
@@ -18,12 +26,13 @@ export default function ClientsTable({
       : '-'
 
   return (
-    <div className="flex min-h-[70vh] flex-col overflow-hidden rounded-2xl border-2" style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}>
-      <div className="hidden overflow-x-auto md:block">
+    <>
+      <div className="hidden min-h-[70vh] flex-col overflow-hidden rounded-2xl border-2 md:flex" style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}>
+        <div className="min-h-0 flex-1 overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr style={{ background: 'var(--ew-ground)' }}>
-              {['Name', 'Email', 'Phone number', 'Additional fields', 'Added'].map((label) => (
+              {['Name', 'Email', 'Phone number', 'Added', ...(canManage ? ['Actions'] : [])].map((label) => (
                 <th key={label} className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ew-muted)]">
                   {label}
                 </th>
@@ -36,46 +45,71 @@ export default function ClientsTable({
                   <td className="px-5 py-3.5 font-medium text-[var(--ew-ink)]">{client.name}</td>
                   <td className="px-5 py-3.5 text-[var(--ew-ink)]">{client.email || '-'}</td>
                   <td className="px-5 py-3.5 text-[var(--ew-ink)]">{client.phoneNumber || '-'}</td>
-                  <td className="px-5 py-3.5 text-[var(--ew-ink)]">
-                    {Object.entries(client.customFields || {}).length > 0
-                      ? Object.entries(client.customFields).map(([key, value]) => (
-                          <div key={key} className="max-w-xs truncate" title={`${key}: ${value}`}>
-                            <span className="font-medium">{key}:</span> {value}
-                          </div>
-                        ))
-                      : '-'}
-                  </td>
                   <td className="whitespace-nowrap px-5 py-3.5 text-[var(--ew-muted)]">{createdDate(client.createdAt)}</td>
+                  {canManage && (
+                    <td className="whitespace-nowrap px-5 py-3.5">
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => onView?.(client)} className="inline-flex h-8 items-center gap-1.5 rounded-xs bg-[#cc785c] px-3 text-xs font-medium text-white transition-colors hover:bg-[#b36a4e]">
+                          View
+                          <MdKeyboardDoubleArrowRight className="h-4 w-4" />
+                        </button>
+                        <button type="button" onClick={() => onDelete?.(client)} aria-label={`Delete ${client.name}`} className="flex h-8 w-8 items-center justify-center rounded-xs bg-danger text-white transition-colors hover:bg-danger-strong">
+                          <LuTrash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
-              )) : (
+              )              ) : (
                 <tr>
-                  <td colSpan={5} className="px-5 py-12 text-center text-sm text-[var(--ew-muted)]">
+                  <td colSpan={canManage ? 5 : 4} className="px-5 py-12 text-center text-sm text-[var(--ew-muted)]">
                     {loading ? 'Loading clients...' : error || 'No clients found.'}
                   </td>
                 </tr>
               )}
           </tbody>
         </table>
+        </div>
+        <footer className="mt-auto flex items-center justify-between gap-3 border-t px-4 py-3 sm:px-6" style={{ borderColor: 'var(--ew-line)' }}>
+          <p className="text-sm text-[var(--ew-muted)]">
+            Page {page} of {totalPages} · {total} results
+          </p>
+          <div className="flex shrink-0 gap-2">
+            <button type="button" onClick={onPrevious} disabled={page <= 1 || loading} className="rounded-xs border px-3 py-2 text-body-sm font-medium text-[var(--ew-ink)] transition-colors hover:bg-ground/70 disabled:cursor-not-allowed disabled:opacity-60" style={{ borderColor: 'var(--ew-line)' }}>
+              Previous
+            </button>
+            <button type="button" onClick={onNext} disabled={page >= totalPages || loading} className="rounded-xs bg-[#cc785c] px-3 py-2 text-body-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:cursor-not-allowed disabled:opacity-60">
+              Next
+            </button>
+          </div>
+        </footer>
       </div>
-      <div className="space-y-3 p-4 md:hidden">
+      <div className="space-y-3 pb-28 md:hidden">
         {clients.length > 0 ? clients.map((client) => (
-          <article key={client.id} className="rounded-lg border p-4" style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-ground)' }}>
-            <h3 className="truncate font-medium text-[var(--ew-ink)]">{client.name}</h3>
-            <p className="mt-1 truncate text-sm text-[var(--ew-muted)]">{client.email || client.phoneNumber}</p>
-            {client.email && client.phoneNumber && (
-              <p className="mt-1 truncate text-sm text-[var(--ew-muted)]">{client.phoneNumber}</p>
+          <article
+            key={client.id}
+            className="rounded-lg border p-5 transition-colors"
+            style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
+          >
+            <h3 className="truncate text-body font-semibold text-[var(--ew-ink)]">{client.name}</h3>
+            <div className="mt-2 space-y-1">
+              {client.email && <p className="truncate text-body-sm text-[var(--ew-muted)]">{client.email}</p>}
+              {client.phoneNumber && <p className="truncate text-body-sm text-[var(--ew-muted)]">{client.phoneNumber}</p>}
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3" style={{ borderColor: 'var(--ew-line)' }}>
+              <p className="text-xs text-[var(--ew-muted)]">{createdDate(client.createdAt)}</p>
+            {canManage && (
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => onView?.(client)} className="inline-flex h-9 items-center justify-center gap-2 rounded-xs bg-[#cc785c] px-4 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e]">
+                  View
+                  <MdKeyboardDoubleArrowRight className="h-5 w-5" />
+                </button>
+                <button type="button" onClick={() => onDelete?.(client)} aria-label={`Delete ${client.name}`} className="flex h-9 w-10 items-center justify-center rounded-xs bg-danger text-white transition-colors hover:bg-danger-strong">
+                  <LuTrash2 className="h-4 w-4" />
+                </button>
+              </div>
             )}
-            {Object.entries(client.customFields || {}).length > 0 && (
-              <dl className="mt-2 space-y-1">
-                {Object.entries(client.customFields).map(([key, value]) => (
-                  <div key={key} className="flex gap-1 text-xs">
-                    <dt className="font-medium text-[var(--ew-ink)]">{key}:</dt>
-                    <dd className="min-w-0 truncate text-[var(--ew-muted)]">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-            <p className="mt-2 text-xs text-[var(--ew-muted)]">{createdDate(client.createdAt)}</p>
+            </div>
           </article>
         )) : (
           <p className="py-8 text-center text-sm text-[var(--ew-muted)]">
@@ -83,30 +117,19 @@ export default function ClientsTable({
           </p>
         )}
       </div>
-      <footer className="mt-auto flex items-center justify-between gap-3 border-t px-4 py-3 sm:px-6" style={{ borderColor: 'var(--ew-line)' }}>
-        <p className="text-sm text-[var(--ew-muted)]">
-          Page {page} of {totalPages} · {total} results
-        </p>
-        <div className="flex shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={onPrevious}
-            disabled={page <= 1 || loading}
-            className="rounded-xs border px-3 py-2 text-body-sm font-medium text-[var(--ew-ink)] transition-colors hover:bg-ground/70 disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ borderColor: 'var(--ew-line)' }}
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            onClick={onNext}
-            disabled={page >= totalPages || loading}
-            className="rounded-xs bg-[#cc785c] px-3 py-2 text-body-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Next
-          </button>
-        </div>
-      </footer>
-    </div>
+      {createPortal(
+        <PackageFooter
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          onPrevious={onPrevious}
+          onNext={onNext}
+          canPrevious={page > 1 && !loading}
+          canNext={page < totalPages && !loading}
+          className="fixed inset-x-0 bottom-0 z-40 border-t bg-surface pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] md:hidden"
+        />,
+        document.body,
+      )}
+    </>
   )
 }

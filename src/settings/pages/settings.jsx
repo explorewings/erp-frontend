@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../../authetication/auth-context.js'
 import { fetchUsers, fetchAccess, saveAccess, fetchAccessItems } from '../api.js'
 import Loader from '../../appcomponents/loader.jsx'
@@ -168,7 +169,7 @@ export default function Settings() {
 
   return (
     <>
-    <section className={`ew-rise mx-auto max-w-6xl space-y-6 ${(isCreateOpen || selectedUser || selectedMenu) ? 'blur-sm pointer-events-none select-none' : ''}`}>
+    <section className={`ew-rise mx-auto max-w-6xl space-y-6 pb-20 sm:pb-0 ${(isCreateOpen || selectedUser || selectedMenu) ? 'blur-sm pointer-events-none select-none' : ''}`}>
       <div className="flex items-center justify-between">
         {tabActions}
         {activeTab === 'users' && (
@@ -176,7 +177,7 @@ export default function Settings() {
             type="button"
             onClick={() => setIsCreateOpen(true)}
             aria-label="Create user"
-            className="flex h-9 w-9 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+            className="hidden h-9 w-9 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e] sm:flex"
           >
             <LuPlus className="h-4 w-4" />
           </button>
@@ -253,6 +254,20 @@ export default function Settings() {
         </div>
       )}
     </section>
+    {activeTab === 'users' && !isCreateOpen && !selectedUser && !selectedMenu && (
+      createPortal(
+        <footer className="fixed inset-x-0 bottom-0 z-40 border-t bg-surface px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] sm:hidden" style={{ borderColor: 'var(--ew-line)' }}>
+          <button
+            type="button"
+            onClick={() => setIsCreateOpen(true)}
+            className="min-h-11 w-full rounded-xs bg-[#cc785c] px-4 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e]"
+          >
+            Create user
+          </button>
+        </footer>,
+        document.body,
+      )
+    )}
     <PermissionDrawer
       menu={selectedMenu}
       open={!!selectedMenu}

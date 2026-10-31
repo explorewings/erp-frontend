@@ -1,17 +1,4 @@
-import { useState } from 'react'
-
 export default function UsersTable({ users, onSelectUser }) {
-  if (!users || users.length === 0) {
-    return (
-      <div
-        className="rounded-2xl border px-6 py-12 text-center text-sm text-[var(--ew-muted)]"
-        style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
-      >
-        No users found.
-      </div>
-    )
-  }
-
   const statusBadge = (status) => {
     const inactive = status === 'inactive'
     return (
@@ -28,12 +15,11 @@ export default function UsersTable({ users, onSelectUser }) {
   }
 
   return (
-    <div
-      className="overflow-hidden rounded-2xl border-2"
-      style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)', height: '70vh' }}
-    >
-      {/* Desktop table */}
-      <div className="hidden h-full overflow-x-auto overflow-y-auto md:block">
+    <>
+      <div
+        className="hidden h-[70vh] overflow-x-auto overflow-y-auto rounded-2xl border-2 md:block"
+        style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
+      >
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr style={{ background: 'var(--ew-ground)' }}>
@@ -48,7 +34,7 @@ export default function UsersTable({ users, onSelectUser }) {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
+            {users?.length ? users.map((user) => (
               <tr
                 key={user.id}
                 onClick={() => onSelectUser?.(user)}
@@ -75,34 +61,39 @@ export default function UsersTable({ users, onSelectUser }) {
                     : '-'}
                 </td>
               </tr>
-            ))}
+            )) : (
+              <tr>
+                <td colSpan={5} className="px-5 py-12 text-center text-sm text-[var(--ew-muted)]">
+                  No users found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* Mobile cards */}
-      <div className="h-full space-y-3 overflow-y-auto p-4 md:hidden">
-        {users.map((user) => (
+      <div className="space-y-3 pb-24 md:hidden">
+        {users?.length ? users.map((user) => (
           <div
             key={user.id}
             onClick={() => onSelectUser?.(user)}
-            className="cursor-pointer rounded-lg border p-4 transition-colors hover:bg-[#cc785c] hover:text-white"
-            style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-ground)' }}
+            className="cursor-pointer rounded-lg border p-5 transition-colors hover:bg-ground/70"
+            style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate font-medium text-[var(--ew-ink)]">
+                <p className="truncate text-body font-semibold text-[var(--ew-ink)]">
                   {user.username}
                 </p>
-                <p className="mt-0.5 truncate text-sm text-[var(--ew-muted)]">
+                <p className="mt-1 truncate text-body-sm text-[var(--ew-muted)]">
                   {user.email}
                 </p>
               </div>
-              <span className="shrink-0 text-xs font-medium capitalize text-[var(--ew-muted)]">
+              <span className="shrink-0 rounded-xs bg-ground px-2.5 py-1 text-xs font-medium capitalize text-[var(--ew-muted)]">
                 {user.role}
               </span>
             </div>
-            <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="mt-4 flex items-center justify-between gap-2 border-t pt-3" style={{ borderColor: 'var(--ew-line)' }}>
               <p className="text-xs text-[var(--ew-muted)]">
                 {user.createdAt
                   ? new Date(user.createdAt).toLocaleDateString(undefined, {
@@ -115,8 +106,10 @@ export default function UsersTable({ users, onSelectUser }) {
               {statusBadge(user.status)}
             </div>
           </div>
-        ))}
+        )) : (
+          <p className="py-12 text-center text-sm text-[var(--ew-muted)]">No users found.</p>
+        )}
       </div>
-    </div>
+    </>
   )
 }

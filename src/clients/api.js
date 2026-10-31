@@ -9,6 +9,13 @@ async function readResponse(response, fallback) {
   return data
 }
 
+function authHeaders(token, includeJson = false) {
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+  }
+}
+
 export async function fetchClients(token, params = {}) {
   const query = new URLSearchParams()
   if (params.search) query.set('search', params.search)
@@ -16,7 +23,7 @@ export async function fetchClients(token, params = {}) {
   if (params.limit) query.set('limit', String(params.limit))
   const response = await fetch(
     `${API_BASE_URL}/clients${query.size ? `?${query.toString()}` : ''}`,
-    { headers: { Authorization: `Bearer ${token}` } },
+    { headers: authHeaders(token) },
   )
   return readResponse(response, 'Unable to load clients.')
 }
@@ -24,11 +31,25 @@ export async function fetchClients(token, params = {}) {
 export async function createClient(token, payload) {
   const response = await fetch(`${API_BASE_URL}/clients`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: authHeaders(token, true),
     body: JSON.stringify(payload),
   })
   return readResponse(response, 'Unable to create client.')
+}
+
+export async function updateClient(token, id, payload) {
+  const response = await fetch(`${API_BASE_URL}/clients/${id}`, {
+    method: 'PATCH',
+    headers: authHeaders(token, true),
+    body: JSON.stringify(payload),
+  })
+  return readResponse(response, 'Unable to update client.')
+}
+
+export async function deleteClient(token, id) {
+  const response = await fetch(`${API_BASE_URL}/clients/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to delete client.')
 }
