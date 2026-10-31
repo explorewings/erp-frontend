@@ -17,7 +17,7 @@ export default function ErpLayout() {
   const [navOpen, setNavOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const { pathname } = useLocation()
-  const isPackagesPage = pathname.endsWith('/packages')
+  const isCatalogPage = pathname.endsWith('/packages') || pathname.endsWith('/resorts')
 
   useEffect(() => {
     try {
@@ -41,7 +41,7 @@ export default function ErpLayout() {
 
         <main
           className={`flex min-h-0 min-w-0 flex-1 flex-col px-4 ${
-            isPackagesPage
+            isCatalogPage
               ? 'overflow-hidden pt-6 sm:px-8 sm:pt-4'
               : 'overflow-y-auto py-6 sm:px-8 sm:py-8'
           }`}
@@ -49,7 +49,7 @@ export default function ErpLayout() {
           <div
             key={pathname}
             className={
-              isPackagesPage
+              isCatalogPage
                 ? 'flex min-h-0 w-full flex-1 flex-col'
                 : 'ew-rise mx-auto w-full max-w-6xl'
             }
