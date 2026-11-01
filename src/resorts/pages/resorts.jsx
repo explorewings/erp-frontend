@@ -59,7 +59,7 @@ export default function Resorts() {
   return (
     <>
       <section className="relative flex min-h-0 flex-1 flex-col gap-4">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 md:px-4">
           <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search resorts..." className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15 sm:w-64" style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }} />
           <button type="button" onClick={() => setAddOpen(true)} aria-label="Create resort" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xs bg-[#cc785c] text-white hover:bg-[#b36a4e]"><LuPlus className="h-4 w-4" /></button>
         </div>

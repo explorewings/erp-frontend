@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LuPlus } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
 import Alert from '../../appcomponents/alert.jsx'
@@ -23,11 +23,31 @@ export default function Clients() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState(null)
   const [clientToDelete, setClientToDelete] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [toast, setToast] = useState(null)
+  const addMenuRef = useRef(null)
   const canCreate = user?.role === 'superadmin' || user?.role === 'superuser'
+
+  useEffect(() => {
+    if (!isAddMenuOpen) return undefined
+
+    const handlePointerDown = (event) => {
+      if (!addMenuRef.current?.contains(event.target)) setIsAddMenuOpen(false)
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setIsAddMenuOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isAddMenuOpen])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300)
@@ -90,7 +110,7 @@ export default function Clients() {
   return (
     <>
       <section className="relative flex min-h-0 flex-1 flex-col gap-4">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 md:px-4">
           <input
             type="search"
             value={search}
@@ -101,14 +121,46 @@ export default function Clients() {
             style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
           />
           {canCreate && (
-            <button
-              type="button"
-              onClick={() => setAddOpen(true)}
-              aria-label="Add client"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
-            >
-              <LuPlus className="h-4 w-4" />
-            </button>
+            <div className="relative shrink-0" ref={addMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsAddMenuOpen((open) => !open)}
+                aria-label="Add client options"
+                aria-haspopup="menu"
+                aria-expanded={isAddMenuOpen}
+                className="flex h-10 w-10 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+              >
+                <LuPlus className="h-4 w-4" />
+              </button>
+              {isAddMenuOpen && (
+                <div
+                  role="menu"
+                  aria-label="Client actions"
+                  className="absolute right-0 z-30 mt-2 w-48 overflow-hidden rounded-control border bg-surface py-1 shadow-panel"
+                  style={{ borderColor: 'var(--ew-line)' }}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsAddMenuOpen(false)
+                      setAddOpen(true)
+                    }}
+                    className="flex w-full items-center px-4 py-2.5 text-left text-sm text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
+                  >
+                    Add client
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled
+                    className="flex w-full cursor-not-allowed items-center px-4 py-2.5 text-left text-sm text-[var(--ew-muted)] opacity-60"
+                  >
+                    Import data
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

@@ -72,7 +72,7 @@ function Packages() {
   return (
     <>
     <section className="relative flex min-h-0 flex-1 flex-col gap-4">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 md:px-4">
         <input
           type="search"
           value={search}
