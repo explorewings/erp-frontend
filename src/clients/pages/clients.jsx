@@ -6,6 +6,7 @@ import Loader from '../../appcomponents/loader.jsx'
 import Toast from '../../appcomponents/toast.jsx'
 import AddClient from '../components/add-client.jsx'
 import ClientDetails from '../components/client-details.jsx'
+import ClientImportModal from '../components/client-import-modal.jsx'
 import ClientsTable from '../components/clients-table.jsx'
 import { deleteClient, fetchClients } from '../api.js'
 
@@ -23,12 +24,14 @@ export default function Clients() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState(null)
   const [clientToDelete, setClientToDelete] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [toast, setToast] = useState(null)
   const addMenuRef = useRef(null)
+  const resultsScrollRef = useRef(null)
   const canCreate = user?.role === 'superadmin' || user?.role === 'superuser'
 
   useEffect(() => {
@@ -57,6 +60,10 @@ export default function Clients() {
   useEffect(() => {
     setPage(1)
   }, [debouncedSearch])
+
+  useEffect(() => {
+    resultsScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [page])
 
   useEffect(() => {
     if (!token) return undefined
@@ -153,8 +160,11 @@ export default function Clients() {
                   <button
                     type="button"
                     role="menuitem"
-                    disabled
-                    className="flex w-full cursor-not-allowed items-center px-4 py-2.5 text-left text-sm text-[var(--ew-muted)] opacity-60"
+                    onClick={() => {
+                      setIsAddMenuOpen(false)
+                      setImportOpen(true)
+                    }}
+                    className="flex w-full items-center px-4 py-2.5 text-left text-sm text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
                   >
                     Import data
                   </button>
@@ -164,8 +174,13 @@ export default function Clients() {
           )}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-6xl p-0 pb-28 md:p-4 md:pb-4">
+        <div
+          ref={resultsScrollRef}
+          className="relative min-h-0 flex-1 overflow-y-auto"
+          aria-busy={loading}
+        >
+          <div className={loading ? 'blur-sm' : ''}>
+            <div className="mx-auto w-full max-w-6xl p-0 pb-28 md:p-4 md:pb-4">
             <ClientsTable
               clients={items}
               loading={loading}
@@ -179,7 +194,13 @@ export default function Clients() {
               onDelete={setClientToDelete}
               canManage={canCreate}
             />
+            </div>
           </div>
+          {loading && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--ew-surface)]/45 backdrop-blur-[1px]" role="status" aria-label="Loading clients">
+              <Loader size={2.2} />
+            </div>
+          )}
         </div>
 
         <AddClient
@@ -190,6 +211,16 @@ export default function Clients() {
             setPage(1)
             setRefreshKey((current) => current + 1)
             setToast({ message: 'Client added', type: 'success' })
+          }}
+        />
+        <ClientImportModal
+          open={importOpen}
+          token={token}
+          onClose={() => setImportOpen(false)}
+          onImported={({ name, importedRows }) => {
+            setPage(1)
+            setRefreshKey((current) => current + 1)
+            setToast({ message: `${importedRows} clients imported as "${name}"`, type: 'success' })
           }}
         />
       </section>

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { LuTrash2 } from 'react-icons/lu'
 import { MdKeyboardDoubleArrowRight } from 'react-icons/md'
 import { createPortal } from 'react-dom'
@@ -16,6 +17,12 @@ export default function ClientsTable({
   onDelete,
   canManage = false,
 }) {
+  const tableScrollRef = useRef(null)
+
+  useEffect(() => {
+    tableScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [page])
+
   const createdDate = (value) =>
     value
       ? new Date(value).toLocaleDateString(undefined, {
@@ -27,10 +34,10 @@ export default function ClientsTable({
 
   return (
     <>
-      <div className="hidden min-h-[70vh] flex-col overflow-hidden rounded-2xl border-2 md:flex" style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}>
-        <div className="min-h-0 flex-1 overflow-x-auto">
+      <div className="hidden h-[70vh] max-h-[70vh] flex-col overflow-hidden rounded-2xl border-2 md:flex" style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}>
+        <div ref={tableScrollRef} className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-collapse text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr style={{ background: 'var(--ew-ground)' }}>
               {['Name', 'Email', 'Phone number', 'Added', ...(canManage ? ['Actions'] : [])].map((label) => (
                 <th key={label} className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ew-muted)]">

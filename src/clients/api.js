@@ -53,3 +53,37 @@ export async function deleteClient(token, id) {
   })
   return readResponse(response, 'Unable to delete client.')
 }
+
+export async function createClientImport(token, payload) {
+  const response = await fetch(`${API_BASE_URL}/client-imports`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify(payload),
+  })
+  return readResponse(response, 'Unable to start client import.')
+}
+
+export async function appendClientImportBatch(token, importId, rows) {
+  const response = await fetch(`${API_BASE_URL}/client-imports/${importId}/batches`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ rows }),
+  })
+  return readResponse(response, 'Unable to import this client batch.')
+}
+
+export async function completeClientImport(token, importId) {
+  const response = await fetch(`${API_BASE_URL}/client-imports/${importId}/complete`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+  })
+  return readResponse(response, 'Unable to complete client import.')
+}
+
+export async function failClientImport(token, importId) {
+  const response = await fetch(`${API_BASE_URL}/client-imports/${importId}/fail`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+  })
+  return readResponse(response, 'Unable to record the failed client import.')
+}
