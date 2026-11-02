@@ -662,7 +662,7 @@ export default function ClientImportModal({ open, token, onClose, onImported }) 
             <div className="flex min-w-48 flex-1 items-center gap-3 sm:max-w-md" role="status" aria-live="polite">
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-ground">
                 <div
-                  className="h-full rounded-full bg-[#2d82f6] transition-[width] duration-300"
+                  className="h-full rounded-full bg-[#cc785c] transition-[width] duration-300"
                   style={{ width: `${progress}%` }}
                 />
               </div>

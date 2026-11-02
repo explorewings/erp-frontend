@@ -9,8 +9,8 @@
   --ew-surface: #ffffff;
   --ew-line: #e7e5e1;
   --ew-field-line: #9d978e;
-  --ew-accent: #c2410c;
-  --ew-accent-strong: #9a3412;
+  --ew-accent: #d69375;
+  --ew-accent-strong: #b76c4f;
   --ew-font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
 }
@@ -60,11 +60,11 @@
   }
 
   ::selection {
-    background: rgba(194, 65, 12, 0.16);
+    background: rgba(214, 147, 117, 0.18);
   }
 
   :focus-visible {
-    outline-color: rgba(194, 65, 12, 0.55);
+    outline-color: rgba(214, 147, 117, 0.6);
   }
 
   input {
@@ -98,15 +98,15 @@
 
 @layer utilities {
   .bg-ink {
-    background-color: #cc785c !important;
+    background-color: var(--ew-accent) !important;
   }
   .ew-ground {
     background-color: var(--ew-ground);
     background-image:
       radial-gradient(
         120% 80% at 50% -10%,
-        rgba(194, 65, 12, 0.06),
-        rgba(194, 65, 12, 0) 60%
+        rgba(214, 147, 117, 0.1),
+        rgba(214, 147, 117, 0) 60%
       ),
       radial-gradient(rgba(27, 26, 24, 0.05) 1px, transparent 1.4px);
     background-size: 100% 100%, 22px 22px;

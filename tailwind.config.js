@@ -17,9 +17,9 @@ export default {
         line: "#e7e5e1",
         field: "#9d978e",
         accent: {
-          DEFAULT: "#c2410c",
-          strong: "#9a3412",
-          soft: "#fff7ed",
+          DEFAULT: "#d69375",
+          strong: "#b76c4f",
+          soft: "#fff5ef",
         },
         danger: {
           DEFAULT: "#dc2626",

@@ -2,7 +2,7 @@ const spinnerStyles = `
 .dot-spinner {
   --uib-size: 2.8rem;
   --uib-speed: .9s;
-  --uib-color: #cc785c;
+  --uib-color: var(--ew-accent);
   position: relative;
   display: flex;
   align-items: center;
@@ -31,7 +31,7 @@ const spinnerStyles = `
   transform: scale(0);
   opacity: 0.5;
   animation: pulse0112 calc(var(--uib-speed) * 1.111) ease-in-out infinite;
-  box-shadow: 0 0 20px rgba(194, 65, 12, 0.3);
+  box-shadow: 0 0 20px rgba(214, 147, 117, 0.32);
 }
 
 .dot-spinner__dot:nth-child(2) {

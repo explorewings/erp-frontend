@@ -88,7 +88,7 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
                       collapsed ? 'lg:justify-center lg:gap-0 lg:px-0' : ''
                     } ${
                       isActive
-                        ? 'bg-[#cc785c] text-white'
+                        ? 'bg-accent text-white'
                         : 'text-muted hover:bg-ground/70 hover:text-ink'
                     }`
                   }

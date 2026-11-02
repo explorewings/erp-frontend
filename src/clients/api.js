@@ -54,6 +54,14 @@ export async function deleteClient(token, id) {
   return readResponse(response, 'Unable to delete client.')
 }
 
+export async function deleteImportedClientsBatch(token, importId) {
+  const response = await fetch(`${API_BASE_URL}/clients/imports/${importId}/bulk`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to delete imported clients.')
+}
+
 export async function createClientImport(token, payload) {
   const response = await fetch(`${API_BASE_URL}/client-imports`, {
     method: 'POST',
@@ -61,6 +69,21 @@ export async function createClientImport(token, payload) {
     body: JSON.stringify(payload),
   })
   return readResponse(response, 'Unable to start client import.')
+}
+
+export async function fetchClientImports(token) {
+  const response = await fetch(`${API_BASE_URL}/client-imports`, {
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to load client imports.')
+}
+
+export async function deleteClientImport(token, importId) {
+  const response = await fetch(`${API_BASE_URL}/client-imports/${importId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to delete client import.')
 }
 
 export async function appendClientImportBatch(token, importId, rows) {
