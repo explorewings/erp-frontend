@@ -1,4 +1,6 @@
 import { LuTrash2 } from 'react-icons/lu'
+import { FaArrowUpRightFromSquare } from 'react-icons/fa6'
+import Tooltip from '../../appcomponents/tooltip.jsx'
 
 const statusStyles = {
   completed: 'bg-success-soft text-success',
@@ -13,6 +15,7 @@ export default function ClientImportCard({
   isDeleting = false,
   deleteProgress = 0,
   onDelete,
+  onViewClients,
 }) {
   const createdDate = clientImport.createdAt
     ? new Date(clientImport.createdAt).toLocaleDateString(undefined, {
@@ -49,17 +52,32 @@ export default function ClientImportCard({
             {createdDate}
           </time>
         </div>
-        {canDelete && !isDeleting && status !== 'processing' && (
-          <button
-            type="button"
-            onClick={() => onDelete?.(clientImport)}
-            aria-label={`Delete ${clientImport.name} import`}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xs border text-danger-strong transition-colors hover:bg-danger-soft"
-            style={{ borderColor: 'var(--ew-line)' }}
-          >
-            <LuTrash2 className="h-4 w-4" />
-          </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {canDelete && !isDeleting && status !== 'processing' && (
+            <button
+              type="button"
+              onClick={() => onDelete?.(clientImport)}
+              aria-label={`Delete ${clientImport.name} import`}
+              className="flex h-8 w-8 items-center justify-center rounded-xs border text-danger-strong transition-colors hover:bg-danger-soft"
+              style={{ borderColor: 'var(--ew-line)' }}
+            >
+              <LuTrash2 className="h-4 w-4" />
+            </button>
+          )}
+          {!isDeleting && (
+            <Tooltip content="View clients from this import">
+              <button
+                type="button"
+                onClick={() => onViewClients?.(clientImport)}
+                aria-label={`View clients from ${clientImport.name}`}
+                className="flex h-8 w-8 items-center justify-center rounded-xs border text-[var(--ew-muted)] transition-colors hover:bg-ground/70 hover:text-[var(--ew-ink)]"
+                style={{ borderColor: 'var(--ew-line)' }}
+              >
+                <FaArrowUpRightFromSquare className="h-3.5 w-3.5" />
+              </button>
+          </Tooltip>
         )}
+      </div>
       </div>
       {isDeleting && (
         <div className="mt-4 px-2 pb-1" role="status" aria-label={`Deleting clients from ${clientImport.name}`}>

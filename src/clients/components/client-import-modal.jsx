@@ -292,6 +292,7 @@ export default function ClientImportModal({ open, token, onClose, onImported }) 
       return
     }
     setIsReading(true)
+    setImportName('')
     setError('')
     try {
       const parsed = await parseWorkbook(file)
@@ -305,7 +306,6 @@ export default function ClientImportModal({ open, token, onClose, onImported }) 
           ? `Using the first worksheet, "${parsed.sheetName}".`
           : `Worksheet: ${parsed.sheetName}`,
       )
-      setImportName(file.name.replace(/\.[^.]+$/, '').slice(0, 120))
     } catch (parseError) {
       setFileName('')
       setHeaders([])
@@ -597,9 +597,10 @@ export default function ClientImportModal({ open, token, onClose, onImported }) 
               )}
               <div className="mb-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                 <label className="block text-xs font-medium text-[var(--ew-muted)]">
-                  Import name
+                  Import name <span className="text-danger-strong">· Required</span>
                   <input
                     type="text"
+                    required
                     maxLength={120}
                     value={importName}
                     onChange={(event) => setImportName(event.target.value)}

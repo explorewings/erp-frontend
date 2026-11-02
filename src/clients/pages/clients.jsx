@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { LuPlus, LuSearch } from 'react-icons/lu'
+import { LuCheck, LuFilter, LuPlus, LuSearch } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
 import Alert from '../../appcomponents/alert.jsx'
 import Loader from '../../appcomponents/loader.jsx'
 import Toast from '../../appcomponents/toast.jsx'
+import Tooltip from '../../appcomponents/tooltip.jsx'
 import AddClient from '../components/add-client.jsx'
 import ClientCards from '../components/client-cards.jsx'
 import ClientDetails from '../components/client-details.jsx'
@@ -28,6 +29,7 @@ const TABS = [
 export default function Clients() {
   const { token, user } = useAuth()
   const [activeTab, setActiveTab] = useState('clients')
+  const [selectedImportId, setSelectedImportId] = useState(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -43,6 +45,7 @@ export default function Clients() {
   const [addOpen, setAddOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState(null)
   const [clientToDelete, setClientToDelete] = useState(null)
   const [importToDelete, setImportToDelete] = useState(null)
@@ -50,6 +53,7 @@ export default function Clients() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [toast, setToast] = useState(null)
   const addMenuRef = useRef(null)
+  const filterMenuRef = useRef(null)
   const resultsScrollRef = useRef(null)
   const [sliderStyle, setSliderStyle] = useState({ left: 0, width: 0 })
   const tabRefs = useRef([])
@@ -69,13 +73,15 @@ export default function Clients() {
   }, [activeTab])
 
   useEffect(() => {
-    if (!isAddMenuOpen) return undefined
+    if (!isAddMenuOpen && !isFilterMenuOpen) return undefined
 
     const handlePointerDown = (event) => {
       if (!addMenuRef.current?.contains(event.target)) setIsAddMenuOpen(false)
+      if (!filterMenuRef.current?.contains(event.target)) setIsFilterMenuOpen(false)
     }
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') setIsAddMenuOpen(false)
+      if (event.key === 'Escape') setIsFilterMenuOpen(false)
     }
 
     document.addEventListener('pointerdown', handlePointerDown)
@@ -84,7 +90,7 @@ export default function Clients() {
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isAddMenuOpen])
+  }, [isAddMenuOpen, isFilterMenuOpen])
 
   useEffect(() => {
     resultsScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
@@ -95,7 +101,7 @@ export default function Clients() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    fetchClients(token, { page, limit: LIMIT })
+    fetchClients(token, { page, limit: LIMIT, importId: selectedImportId })
       .then((data) => {
         if (cancelled) return
         setItems(Array.isArray(data?.items) ? data.items : [])
@@ -111,10 +117,10 @@ export default function Clients() {
     return () => {
       cancelled = true
     }
-  }, [token, page, refreshKey])
+  }, [token, page, refreshKey, selectedImportId])
 
   useEffect(() => {
-    if (!token || activeTab !== 'imports') return undefined
+    if (!token) return undefined
 
     let cancelled = false
     setImportsLoading(true)
@@ -133,7 +139,7 @@ export default function Clients() {
     return () => {
       cancelled = true
     }
-  }, [token, activeTab, importRefreshKey])
+  }, [token, importRefreshKey])
 
   const handleDeleteClient = async () => {
     if (!clientToDelete || !token) return
@@ -198,6 +204,7 @@ export default function Clients() {
 
       await deleteClientImport(token, importId)
       setClientImports((current) => current.filter((entry) => entry.id !== importId))
+      if (selectedImportId === importId) setSelectedImportId(null)
       setRefreshKey((current) => current + 1)
       setToast({ message: `Import "${target.name}" and its clients deleted`, type: 'success' })
     } catch (err) {
@@ -269,7 +276,10 @@ export default function Clients() {
               <div className="relative shrink-0" ref={addMenuRef}>
                 <button
                   type="button"
-                  onClick={() => setIsAddMenuOpen((open) => !open)}
+                  onClick={() => {
+                    setIsFilterMenuOpen(false)
+                    setIsAddMenuOpen((open) => !open)
+                  }}
                   aria-label="Add client options"
                   aria-haspopup="menu"
                   aria-expanded={isAddMenuOpen}
@@ -306,6 +316,89 @@ export default function Clients() {
                     >
                       Import data
                     </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {activeTab === 'clients' && (
+              <div className="relative shrink-0" ref={filterMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddMenuOpen(false)
+                    setIsFilterMenuOpen((open) => !open)
+                  }}
+                  aria-label="Filter clients by import"
+                  aria-haspopup="menu"
+                  aria-expanded={isFilterMenuOpen}
+                  className="flex h-10 w-10 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+                >
+                  <LuFilter className="h-4 w-4" />
+                </button>
+                {isFilterMenuOpen && (
+                  <div
+                    className="absolute right-0 z-30 mt-2 max-h-72 w-64 overflow-y-auto rounded-control border bg-surface py-1 shadow-panel"
+                    style={{ borderColor: 'var(--ew-line)' }}
+                    role="menu"
+                    aria-label="Filter clients by import"
+                  >
+                    {importsLoading ? (
+                      <p className="px-4 py-3 text-sm text-[var(--ew-muted)]">Loading imports...</p>
+                    ) : importsError ? (
+                      <p className="px-4 py-3 text-sm text-danger-strong" role="alert">{importsError}</p>
+                    ) : clientImports.length === 0 ? (
+                      <p className="px-4 py-3 text-sm text-[var(--ew-muted)]">No imports yet</p>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={selectedImportId === null}
+                          onClick={() => {
+                            setSelectedImportId(null)
+                            setPage(1)
+                            setIsFilterMenuOpen(false)
+                          }}
+                          className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-ground/70 ${
+                            selectedImportId === null
+                              ? 'bg-accent-soft font-medium text-accent-strong'
+                              : 'text-[var(--ew-ink)]'
+                          }`}
+                        >
+                          All clients
+                          {selectedImportId === null && <LuCheck className="h-4 w-4 shrink-0" aria-hidden="true" />}
+                        </button>
+                        {clientImports.map((clientImport) => (
+                          <Tooltip
+                            key={clientImport.id}
+                            content={clientImport.name}
+                            className="block min-w-0"
+                          >
+                            <button
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={selectedImportId === clientImport.id}
+                              aria-label={clientImport.name}
+                              onClick={() => {
+                                setSelectedImportId(clientImport.id)
+                                setPage(1)
+                                setIsFilterMenuOpen(false)
+                              }}
+                              className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-ground/70 ${
+                                selectedImportId === clientImport.id
+                                  ? 'bg-accent-soft font-medium text-accent-strong'
+                                  : 'text-[var(--ew-ink)]'
+                              }`}
+                            >
+                              <span className="truncate">{clientImport.name}</span>
+                              {selectedImportId === clientImport.id && (
+                                <LuCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                              )}
+                            </button>
+                          </Tooltip>
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -365,6 +458,11 @@ export default function Clients() {
                           isDeleting={Object.prototype.hasOwnProperty.call(deletingImports, clientImport.id)}
                           deleteProgress={deletingImports[clientImport.id] || 0}
                           onDelete={setImportToDelete}
+                          onViewClients={(entry) => {
+                            setSelectedImportId(entry.id)
+                            setPage(1)
+                            setActiveTab('clients')
+                          }}
                         />
                       ))}
                     </div>

@@ -21,6 +21,7 @@ export async function fetchClients(token, params = {}) {
   if (params.search) query.set('search', params.search)
   if (params.page) query.set('page', String(params.page))
   if (params.limit) query.set('limit', String(params.limit))
+  if (params.importId) query.set('importId', String(params.importId))
   const response = await fetch(
     `${API_BASE_URL}/clients${query.size ? `?${query.toString()}` : ''}`,
     { headers: authHeaders(token) },
