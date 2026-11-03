@@ -26,6 +26,7 @@ export default function ClientImportCard({
     : '-'
   const status = isDeleting ? 'deleting' : clientImport.status || 'processing'
   const statusClass = statusStyles[status] || statusStyles.processing
+  const clientCount = Number(clientImport.clientCount ?? clientImport.importedRows) || 0
 
   return (
     <article
@@ -45,9 +46,12 @@ export default function ClientImportCard({
       <div className="mt-4 flex items-end justify-between gap-3">
         <div>
           <p className="text-lg font-semibold text-[var(--ew-ink)]">
-            {clientImport.importedRows} <span className="text-sm font-normal text-[var(--ew-muted)]">/ {clientImport.totalRows} rows</span>
+            {clientCount}
           </p>
-          <p className="mt-1 text-xs text-[var(--ew-muted)]">Client records imported</p>
+          <p className="mt-1 text-xs text-[var(--ew-muted)]">Current client records</p>
+          <p className="mt-1 text-xs text-[var(--ew-muted)]">
+            {clientImport.importedRows} / {clientImport.totalRows} rows imported
+          </p>
           <time className="mt-1 block text-xs text-[var(--ew-muted)]" dateTime={clientImport.createdAt || undefined}>
             {createdDate}
           </time>

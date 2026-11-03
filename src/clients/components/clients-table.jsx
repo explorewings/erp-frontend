@@ -12,6 +12,9 @@ export default function ClientsTable({
   onNext,
   onView,
   onDelete,
+  isSelected = () => false,
+  isSelectionLocked = () => false,
+  onToggleSelection,
   canManage = false,
 }) {
   const createdDate = (value) =>
@@ -38,6 +41,7 @@ export default function ClientsTable({
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-10">
                 <tr style={{ background: 'var(--ew-ground)' }}>
+                  {canManage && <th className="w-12 px-4 py-3.5" aria-label="Select client" />}
                   {['Name', 'Email', 'Phone number', 'Added', ...(canManage ? ['Actions'] : [])].map((label) => (
                     <th key={label} className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ew-muted)]">
                       {label}
@@ -48,6 +52,18 @@ export default function ClientsTable({
               <tbody>
                 {clients.length > 0 ? clients.map((client) => (
                   <tr key={client.id} className="border-b" style={{ borderColor: 'var(--ew-line)' }}>
+                    {canManage && (
+                      <td className="px-4 py-3.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected(client)}
+                          disabled={isSelectionLocked(client)}
+                          onChange={() => onToggleSelection?.(client)}
+                          aria-label={`Select ${client.name}`}
+                          className="h-4 w-4 cursor-pointer rounded-full accent-[#cc785c] disabled:cursor-not-allowed"
+                        />
+                      </td>
+                    )}
                     <td className="px-5 py-3.5 font-medium text-[var(--ew-ink)]">{client.name}</td>
                     <td className="px-5 py-3.5 text-[var(--ew-ink)]">{client.email || '-'}</td>
                     <td className="px-5 py-3.5 text-[var(--ew-ink)]">{client.phoneNumber || '-'}</td>
@@ -68,7 +84,7 @@ export default function ClientsTable({
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={canManage ? 5 : 4} className="px-5 py-12 text-center text-sm text-[var(--ew-muted)]">
+                    <td colSpan={canManage ? 6 : 4} className="px-5 py-12 text-center text-sm text-[var(--ew-muted)]">
                       {loading ? 'Loading clients...' : error || 'No clients found.'}
                     </td>
                   </tr>

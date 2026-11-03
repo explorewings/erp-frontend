@@ -55,6 +55,15 @@ export async function deleteClient(token, id) {
   return readResponse(response, 'Unable to delete client.')
 }
 
+export async function deleteClientsBatch(token, ids) {
+  const response = await fetch(`${API_BASE_URL}/clients/bulk`, {
+    method: 'DELETE',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ ids }),
+  })
+  return readResponse(response, 'Unable to delete selected clients.')
+}
+
 export async function deleteImportedClientsBatch(token, importId) {
   const response = await fetch(`${API_BASE_URL}/clients/imports/${importId}/bulk`, {
     method: 'DELETE',
@@ -75,8 +84,23 @@ export async function createClientImport(token, payload) {
 export async function fetchClientImports(token) {
   const response = await fetch(`${API_BASE_URL}/client-imports`, {
     headers: authHeaders(token),
+    cache: 'no-store',
   })
-  return readResponse(response, 'Unable to load client imports.')
+  const imports = await readResponse(response, 'Unable to load client imports.')
+  if (!Array.isArray(imports)) return imports
+
+  return Promise.all(imports.map(async (clientImport) => {
+    const clients = await fetchClients(token, {
+      page: 1,
+      limit: 1,
+      importId: clientImport.id,
+    })
+    const clientCount = Number(clients?.total)
+    if (!Number.isInteger(clientCount) || clientCount < 0) {
+      throw new Error(`The server returned an invalid client count for "${clientImport.name}".`)
+    }
+    return { ...clientImport, clientCount }
+  }))
 }
 
 export async function deleteClientImport(token, importId) {

@@ -14,6 +14,9 @@ export default function ClientCards({
   onNext,
   onView,
   onDelete,
+  isSelected = () => false,
+  isSelectionLocked = () => false,
+  onToggleSelection,
   canManage = false,
 }) {
   const createdDate = (value) =>
@@ -34,7 +37,19 @@ export default function ClientCards({
             className="rounded-lg border p-5 transition-colors"
             style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
           >
-            <h3 className="truncate text-body font-semibold text-[var(--ew-ink)]">{client.name}</h3>
+            <div className="flex min-w-0 items-center gap-3">
+              {canManage && (
+                <input
+                  type="checkbox"
+                  checked={isSelected(client)}
+                  disabled={isSelectionLocked(client)}
+                  onChange={() => onToggleSelection?.(client)}
+                  aria-label={`Select ${client.name}`}
+                  className="h-4 w-4 shrink-0 cursor-pointer rounded-full accent-[#cc785c] disabled:cursor-not-allowed"
+                />
+              )}
+              <h3 className="min-w-0 truncate text-body font-semibold text-[var(--ew-ink)]">{client.name}</h3>
+            </div>
             <div className="mt-2 space-y-1">
               {client.email && <p className="truncate text-body-sm text-[var(--ew-muted)]">{client.email}</p>}
               {client.phoneNumber && <p className="truncate text-body-sm text-[var(--ew-muted)]">{client.phoneNumber}</p>}

@@ -67,7 +67,7 @@ export default function Toast({
     <div
       role="status"
       aria-live="polite"
-      className={`fixed z-[70] flex max-w-sm items-start gap-3 rounded-control border px-4 py-3 shadow-panel transition-all duration-300 ease-out ${
+      className={`fixed z-[70] flex w-[calc(100vw-2rem)] max-w-md items-start gap-3 rounded-control border px-4 py-3 shadow-panel transition-all duration-300 ease-out sm:w-auto sm:max-w-sm ${
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
       style={{

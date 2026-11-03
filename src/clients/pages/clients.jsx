@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { LuCheck, LuFilter, LuPlus, LuSearch } from 'react-icons/lu'
+import { LuCheck, LuChevronDown, LuChevronRight, LuFilter, LuPlus, LuSearch, LuTrash2 } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
 import Alert from '../../appcomponents/alert.jsx'
 import Loader from '../../appcomponents/loader.jsx'
 import Toast from '../../appcomponents/toast.jsx'
 import Tooltip from '../../appcomponents/tooltip.jsx'
 import AddClient from '../components/add-client.jsx'
+import BulkClientDeleteDialog from '../components/bulk-client-delete-dialog.jsx'
 import ClientCards from '../components/client-cards.jsx'
 import ClientDetails from '../components/client-details.jsx'
-import ClientImportCard from '../components/client-import-card.jsx'
+import ClientImportsPanel from '../components/client-imports-panel.jsx'
 import ClientImportModal from '../components/client-import-modal.jsx'
 import ClientSearchModal from '../components/client-search-modal.jsx'
 import ClientsTable from '../components/clients-table.jsx'
@@ -46,6 +47,11 @@ export default function Clients() {
   const [importOpen, setImportOpen] = useState(false)
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false)
+  const [isSelectionMenuOpen, setIsSelectionMenuOpen] = useState(false)
+  const [isImportSelectorExpanded, setIsImportSelectorExpanded] = useState(false)
+  const [selectedClientIds, setSelectedClientIds] = useState(() => new Set())
+  const [selectedImports, setSelectedImports] = useState({})
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState(null)
   const [clientToDelete, setClientToDelete] = useState(null)
   const [importToDelete, setImportToDelete] = useState(null)
@@ -54,7 +60,9 @@ export default function Clients() {
   const [toast, setToast] = useState(null)
   const addMenuRef = useRef(null)
   const filterMenuRef = useRef(null)
+  const selectionMenuRef = useRef(null)
   const resultsScrollRef = useRef(null)
+  const knownClientsRef = useRef(new Map())
   const [sliderStyle, setSliderStyle] = useState({ left: 0, width: 0 })
   const tabRefs = useRef([])
   const canCreate = user?.role === 'superadmin' || user?.role === 'superuser'
@@ -73,15 +81,17 @@ export default function Clients() {
   }, [activeTab])
 
   useEffect(() => {
-    if (!isAddMenuOpen && !isFilterMenuOpen) return undefined
+    if (!isAddMenuOpen && !isFilterMenuOpen && !isSelectionMenuOpen) return undefined
 
     const handlePointerDown = (event) => {
       if (!addMenuRef.current?.contains(event.target)) setIsAddMenuOpen(false)
       if (!filterMenuRef.current?.contains(event.target)) setIsFilterMenuOpen(false)
+      if (!selectionMenuRef.current?.contains(event.target)) setIsSelectionMenuOpen(false)
     }
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') setIsAddMenuOpen(false)
       if (event.key === 'Escape') setIsFilterMenuOpen(false)
+      if (event.key === 'Escape') setIsSelectionMenuOpen(false)
     }
 
     document.addEventListener('pointerdown', handlePointerDown)
@@ -90,7 +100,7 @@ export default function Clients() {
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isAddMenuOpen, isFilterMenuOpen])
+  }, [isAddMenuOpen, isFilterMenuOpen, isSelectionMenuOpen])
 
   useEffect(() => {
     resultsScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
@@ -104,7 +114,9 @@ export default function Clients() {
     fetchClients(token, { page, limit: LIMIT, importId: selectedImportId })
       .then((data) => {
         if (cancelled) return
-        setItems(Array.isArray(data?.items) ? data.items : [])
+        const nextItems = Array.isArray(data?.items) ? data.items : []
+        nextItems.forEach((client) => knownClientsRef.current.set(client.id, client))
+        setItems(nextItems)
         setTotal(Number(data?.total) || 0)
         setTotalPages(Math.max(1, Number(data?.totalPages) || 1))
       })
@@ -141,6 +153,61 @@ export default function Clients() {
     }
   }, [token, importRefreshKey])
 
+  const selectedImportIds = new Set(Object.keys(selectedImports).map(Number))
+  const actionableSelectedClientIds = [...selectedClientIds].filter((id) => {
+    const client = knownClientsRef.current.get(id)
+    return !client?.importId || !selectedImportIds.has(client.importId)
+  })
+  const selectedCount = actionableSelectedClientIds.length
+    + Object.values(selectedImports).reduce(
+      (sum, clientImport) => sum + (Number(clientImport.clientCount ?? clientImport.importedRows) || 0),
+      0,
+    )
+  const selectedImportRecords = Object.values(selectedImports)
+  const isClientSelected = (client) =>
+    selectedClientIds.has(client.id) || selectedImportIds.has(client.importId)
+
+  const toggleClientSelection = (client) => {
+    if (client.importId && selectedImportIds.has(client.importId)) return
+    setSelectedClientIds((current) => {
+      const next = new Set(current)
+      if (next.has(client.id)) next.delete(client.id)
+      else next.add(client.id)
+      return next
+    })
+  }
+
+  const selectCurrentPage = () => {
+    setSelectedClientIds((current) => {
+      const next = new Set(current)
+      items.forEach((client) => {
+        if (!client.importId || !selectedImportIds.has(client.importId)) next.add(client.id)
+      })
+      return next
+    })
+    setIsSelectionMenuOpen(false)
+  }
+
+  const toggleImportSelection = (clientImport) => {
+    if (clientImport.status === 'processing') return
+    setSelectedImports((current) => {
+      const next = { ...current }
+      if (next[clientImport.id]) {
+        delete next[clientImport.id]
+      } else {
+        next[clientImport.id] = clientImport
+      }
+      return next
+    })
+    setSelectedClientIds((current) => {
+      const next = new Set(current)
+      for (const [id, client] of knownClientsRef.current) {
+        if (client.importId === clientImport.id) next.delete(id)
+      }
+      return next
+    })
+  }
+
   const handleDeleteClient = async () => {
     if (!clientToDelete || !token) return
     setIsDeleting(true)
@@ -155,6 +222,7 @@ export default function Clients() {
       if (selectedClient?.id === clientToDelete.id) setSelectedClient(null)
       setToast({ message: 'Client deleted', type: 'success' })
       setClientToDelete(null)
+      setImportRefreshKey((current) => current + 1)
     } catch (err) {
       setToast({ message: err?.message || 'Unable to delete client.', type: 'error' })
     } finally {
@@ -251,7 +319,15 @@ export default function Clients() {
                   role="tab"
                   aria-selected={isActive}
                   aria-controls={`clients-panel-${tab.id}`}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    if (tab.id !== 'clients') {
+                      setSelectedClientIds(new Set())
+                      setSelectedImports({})
+                      setIsSelectionMenuOpen(false)
+                      setImportRefreshKey((current) => current + 1)
+                    }
+                    setActiveTab(tab.id)
+                  }}
                   className={`relative z-10 whitespace-nowrap rounded-xs px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${
                     isActive ? 'text-white' : 'text-[var(--ew-muted)]'
                   }`}
@@ -262,146 +338,269 @@ export default function Clients() {
             })}
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            {activeTab === 'clients' && (
-              <button
-                type="button"
-                onClick={() => setSearchOpen(true)}
-                aria-label="Search clients"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
-              >
-                <LuSearch className="h-4 w-4" />
-              </button>
-            )}
-            {canCreate && (
-              <div className="relative shrink-0" ref={addMenuRef}>
+            {selectedCount > 0 && canCreate ? (
+              <>
+                <div className="relative" ref={selectionMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddMenuOpen(false)
+                      setIsFilterMenuOpen(false)
+                      setIsSelectionMenuOpen((open) => !open)
+                    }}
+                    aria-haspopup="menu"
+                    aria-expanded={isSelectionMenuOpen}
+                    className="flex h-10 items-center gap-2 rounded-xs bg-[#cc785c] px-3 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e]"
+                  >
+                    Select
+                    <LuChevronDown className="h-4 w-4" />
+                  </button>
+                  {isSelectionMenuOpen && (
+                    <div
+                      className="absolute right-0 z-30 mt-2 w-72 rounded-control border bg-surface py-1 shadow-panel"
+                      style={{ borderColor: 'var(--ew-line)' }}
+                      role="menu"
+                      aria-label="Client selection options"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={selectCurrentPage}
+                        className="w-full px-4 py-2.5 text-left text-sm text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
+                      >
+                        Select this page ({items.length})
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-expanded={isImportSelectorExpanded}
+                        onClick={() => setIsImportSelectorExpanded((expanded) => !expanded)}
+                        className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
+                      >
+                        <span>Select imports</span>
+                        {isImportSelectorExpanded
+                          ? <LuChevronDown className="h-4 w-4 shrink-0" />
+                          : <LuChevronRight className="h-4 w-4 shrink-0" />}
+                      </button>
+                      {isImportSelectorExpanded && (
+                        <div className="border-t" style={{ borderColor: 'var(--ew-line)' }}>
+                          {importsLoading ? (
+                            <p className="px-4 py-3 text-sm text-[var(--ew-muted)]">Loading imports...</p>
+                          ) : importsError ? (
+                            <p className="px-4 py-3 text-sm text-danger-strong" role="alert">{importsError}</p>
+                          ) : clientImports.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-[var(--ew-muted)]">No imports yet</p>
+                          ) : (
+                            <div className="max-h-52 overflow-y-auto py-1">
+                              {clientImports.map((clientImport) => {
+                                const checked = Boolean(selectedImports[clientImport.id])
+                                const disabled = clientImport.status === 'processing'
+                                return (
+                                  <Tooltip
+                                    key={clientImport.id}
+                                    content={clientImport.name}
+                                    className="block min-w-0"
+                                  >
+                                    <button
+                                      type="button"
+                                      role="menuitemcheckbox"
+                                      aria-checked={checked}
+                                      disabled={disabled}
+                                      onClick={() => toggleImportSelection(clientImport)}
+                                      className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[var(--ew-ink)] transition-colors hover:bg-ground/70 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        readOnly
+                                        tabIndex={-1}
+                                        aria-hidden="true"
+                                        className="h-4 w-4 shrink-0 rounded-full accent-[#cc785c]"
+                                      />
+                                      <span className="min-w-0 flex-1 truncate">{clientImport.name}</span>
+                                      <span className="shrink-0 text-xs text-[var(--ew-muted)]">
+                                        {Number(clientImport.clientCount ?? clientImport.importedRows) || 0}
+                                      </span>
+                                    </button>
+                                  </Tooltip>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setSelectedClientIds(new Set())
+                          setSelectedImports({})
+                          setIsSelectionMenuOpen(false)
+                        }}
+                        className="w-full border-t px-4 py-2.5 text-left text-sm text-[var(--ew-muted)] transition-colors hover:bg-ground/70"
+                        style={{ borderColor: 'var(--ew-line)' }}
+                      >
+                        Clear selection
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => {
-                    setIsFilterMenuOpen(false)
-                    setIsAddMenuOpen((open) => !open)
+                    setIsSelectionMenuOpen(false)
+                    setBulkDeleteOpen(true)
                   }}
-                  aria-label="Add client options"
-                  aria-haspopup="menu"
-                  aria-expanded={isAddMenuOpen}
-                  className="flex h-10 w-10 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+                  aria-label={`Delete ${selectedCount} selected clients`}
+                  className="flex h-10 w-10 items-center justify-center rounded-xs bg-danger text-white transition-colors hover:bg-danger-strong"
                 >
-                  <LuPlus className="h-4 w-4" />
+                  <LuTrash2 className="h-4 w-4" />
                 </button>
-                {isAddMenuOpen && (
-                  <div
-                    role="menu"
-                    aria-label="Client actions"
-                    className="absolute right-0 z-30 mt-2 w-48 overflow-hidden rounded-control border bg-surface py-1 shadow-panel"
-                    style={{ borderColor: 'var(--ew-line)' }}
+              </>
+            ) : (
+              <>
+                {activeTab === 'clients' && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchOpen(true)}
+                    aria-label="Search clients"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
                   >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setIsAddMenuOpen(false)
-                        setAddOpen(true)
-                      }}
-                      className="flex w-full items-center px-4 py-2.5 text-left text-sm text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
-                    >
-                      Add client
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setIsAddMenuOpen(false)
-                        setImportOpen(true)
-                      }}
-                      className="flex w-full items-center px-4 py-2.5 text-left text-sm text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
-                    >
-                      Import data
-                    </button>
-                  </div>
+                    <LuSearch className="h-4 w-4" />
+                  </button>
                 )}
-              </div>
-            )}
-            {activeTab === 'clients' && (
-              <div className="relative shrink-0" ref={filterMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAddMenuOpen(false)
-                    setIsFilterMenuOpen((open) => !open)
-                  }}
-                  aria-label="Filter clients by import"
-                  aria-haspopup="menu"
-                  aria-expanded={isFilterMenuOpen}
-                  className="flex h-10 w-10 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
-                >
-                  <LuFilter className="h-4 w-4" />
-                </button>
-                {isFilterMenuOpen && (
-                  <div
-                    className="absolute right-0 z-30 mt-2 max-h-72 w-64 overflow-y-auto rounded-control border bg-surface py-1 shadow-panel"
-                    style={{ borderColor: 'var(--ew-line)' }}
-                    role="menu"
-                    aria-label="Filter clients by import"
-                  >
-                    {importsLoading ? (
-                      <p className="px-4 py-3 text-sm text-[var(--ew-muted)]">Loading imports...</p>
-                    ) : importsError ? (
-                      <p className="px-4 py-3 text-sm text-danger-strong" role="alert">{importsError}</p>
-                    ) : clientImports.length === 0 ? (
-                      <p className="px-4 py-3 text-sm text-[var(--ew-muted)]">No imports yet</p>
-                    ) : (
-                      <>
+                {canCreate && (
+                  <div className="relative shrink-0" ref={addMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFilterMenuOpen(false)
+                        setIsAddMenuOpen((open) => !open)
+                      }}
+                      aria-label="Add client options"
+                      aria-haspopup="menu"
+                      aria-expanded={isAddMenuOpen}
+                      className="flex h-10 w-10 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+                    >
+                      <LuPlus className="h-4 w-4" />
+                    </button>
+                    {isAddMenuOpen && (
+                      <div
+                        role="menu"
+                        aria-label="Client actions"
+                        className="absolute right-0 z-30 mt-2 w-48 overflow-hidden rounded-control border bg-surface py-1 shadow-panel"
+                        style={{ borderColor: 'var(--ew-line)' }}
+                      >
                         <button
                           type="button"
-                          role="menuitemradio"
-                          aria-checked={selectedImportId === null}
+                          role="menuitem"
                           onClick={() => {
-                            setSelectedImportId(null)
-                            setPage(1)
-                            setIsFilterMenuOpen(false)
+                            setIsAddMenuOpen(false)
+                            setAddOpen(true)
                           }}
-                          className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-ground/70 ${
-                            selectedImportId === null
-                              ? 'bg-accent-soft font-medium text-accent-strong'
-                              : 'text-[var(--ew-ink)]'
-                          }`}
+                          className="flex w-full items-center px-4 py-2.5 text-left text-sm text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
                         >
-                          All clients
-                          {selectedImportId === null && <LuCheck className="h-4 w-4 shrink-0" aria-hidden="true" />}
+                          Add client
                         </button>
-                        {clientImports.map((clientImport) => (
-                          <Tooltip
-                            key={clientImport.id}
-                            content={clientImport.name}
-                            className="block min-w-0"
-                          >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setIsAddMenuOpen(false)
+                            setImportOpen(true)
+                          }}
+                          className="flex w-full items-center px-4 py-2.5 text-left text-sm text-[var(--ew-ink)] transition-colors hover:bg-ground/70"
+                        >
+                          Import data
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {activeTab === 'clients' && (
+                  <div className="relative shrink-0" ref={filterMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddMenuOpen(false)
+                        setIsFilterMenuOpen((open) => !open)
+                      }}
+                      aria-label="Filter clients by import"
+                      aria-haspopup="menu"
+                      aria-expanded={isFilterMenuOpen}
+                      className="flex h-10 w-10 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+                    >
+                      <LuFilter className="h-4 w-4" />
+                    </button>
+                    {isFilterMenuOpen && (
+                      <div
+                        className="absolute right-0 z-30 mt-2 max-h-72 w-64 overflow-y-auto rounded-control border bg-surface py-1 shadow-panel"
+                        style={{ borderColor: 'var(--ew-line)' }}
+                        role="menu"
+                        aria-label="Filter clients by import"
+                      >
+                        {importsLoading ? (
+                          <p className="px-4 py-3 text-sm text-[var(--ew-muted)]">Loading imports...</p>
+                        ) : importsError ? (
+                          <p className="px-4 py-3 text-sm text-danger-strong" role="alert">{importsError}</p>
+                        ) : clientImports.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-[var(--ew-muted)]">No imports yet</p>
+                        ) : (
+                          <>
                             <button
                               type="button"
                               role="menuitemradio"
-                              aria-checked={selectedImportId === clientImport.id}
-                              aria-label={clientImport.name}
+                              aria-checked={selectedImportId === null}
                               onClick={() => {
-                                setSelectedImportId(clientImport.id)
+                                setSelectedImportId(null)
                                 setPage(1)
                                 setIsFilterMenuOpen(false)
                               }}
                               className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-ground/70 ${
-                                selectedImportId === clientImport.id
+                                selectedImportId === null
                                   ? 'bg-accent-soft font-medium text-accent-strong'
                                   : 'text-[var(--ew-ink)]'
                               }`}
                             >
-                              <span className="truncate">{clientImport.name}</span>
-                              {selectedImportId === clientImport.id && (
-                                <LuCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
-                              )}
+                              All clients
+                              {selectedImportId === null && <LuCheck className="h-4 w-4 shrink-0" aria-hidden="true" />}
                             </button>
-                          </Tooltip>
-                        ))}
-                      </>
+                            {clientImports.map((clientImport) => (
+                              <Tooltip
+                                key={clientImport.id}
+                                content={clientImport.name}
+                                className="block min-w-0"
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitemradio"
+                                  aria-checked={selectedImportId === clientImport.id}
+                                  aria-label={clientImport.name}
+                                  onClick={() => {
+                                    setSelectedImportId(clientImport.id)
+                                    setPage(1)
+                                    setIsFilterMenuOpen(false)
+                                  }}
+                                  className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-ground/70 ${
+                                    selectedImportId === clientImport.id
+                                      ? 'bg-accent-soft font-medium text-accent-strong'
+                                      : 'text-[var(--ew-ink)]'
+                                  }`}
+                                >
+                                  <span className="truncate">{clientImport.name}</span>
+                                  {selectedImportId === clientImport.id && (
+                                    <LuCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                  )}
+                                </button>
+                              </Tooltip>
+                            ))}
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -411,7 +610,7 @@ export default function Clients() {
           className="relative min-h-0 flex-1 overflow-y-auto"
           aria-busy={activeTab === 'clients' ? loading : importsLoading}
         >
-          <div className={(activeTab === 'clients' ? loading : importsLoading) ? 'blur-sm' : ''}>
+          <div className={activeTab === 'clients' && loading ? 'blur-sm' : ''}>
             <div className="mx-auto w-full max-w-6xl p-0 pb-28 md:p-4 md:pb-4">
               {activeTab === 'clients' ? (
                 <section id="clients-panel-clients" role="tabpanel" aria-labelledby="clients-tab-clients">
@@ -426,6 +625,9 @@ export default function Clients() {
                     onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
                     onView={setSelectedClient}
                     onDelete={setClientToDelete}
+                    isSelected={isClientSelected}
+                    isSelectionLocked={(client) => Boolean(client.importId && selectedImportIds.has(client.importId))}
+                    onToggleSelection={toggleClientSelection}
                     canManage={canCreate}
                   />
                   <ClientCards
@@ -439,38 +641,27 @@ export default function Clients() {
                     onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
                     onView={setSelectedClient}
                     onDelete={setClientToDelete}
+                    isSelected={isClientSelected}
+                    isSelectionLocked={(client) => Boolean(client.importId && selectedImportIds.has(client.importId))}
+                    onToggleSelection={toggleClientSelection}
                     canManage={canCreate}
                   />
                 </section>
               ) : (
                 <section id="clients-panel-imports" role="tabpanel" aria-labelledby="clients-tab-imports">
-                  {importsError ? (
-                    <p className="rounded-control border px-4 py-8 text-center text-sm text-danger-strong" role="alert" style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}>
-                      {importsError}
-                    </p>
-                  ) : clientImports.length > 0 ? (
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {clientImports.map((clientImport) => (
-                        <ClientImportCard
-                          key={clientImport.id}
-                          clientImport={clientImport}
-                          canDelete={canCreate}
-                          isDeleting={Object.prototype.hasOwnProperty.call(deletingImports, clientImport.id)}
-                          deleteProgress={deletingImports[clientImport.id] || 0}
-                          onDelete={setImportToDelete}
-                          onViewClients={(entry) => {
-                            setSelectedImportId(entry.id)
-                            setPage(1)
-                            setActiveTab('clients')
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : !importsLoading ? (
-                    <p className="flex min-h-[50vh] items-center justify-center text-center text-sm text-[var(--ew-muted)] md:text-base">
-                      No client imports yet.
-                    </p>
-                  ) : null}
+                  <ClientImportsPanel
+                    imports={clientImports}
+                    loading={importsLoading}
+                    error={importsError}
+                    canDelete={canCreate}
+                    deletingImports={deletingImports}
+                    onDelete={setImportToDelete}
+                    onViewClients={(entry) => {
+                      setSelectedImportId(entry.id)
+                      setPage(1)
+                      setActiveTab('clients')
+                    }}
+                  />
                 </section>
               )}
             </div>
@@ -481,12 +672,6 @@ export default function Clients() {
             </div>
           )}
         </div>
-
-        {activeTab === 'imports' && importsLoading && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--ew-surface)]/45 backdrop-blur-[1px]" role="status" aria-label="Loading client imports">
-            <Loader size={2.2} />
-          </div>
-        )}
 
         <AddClient
           open={addOpen}
@@ -517,6 +702,22 @@ export default function Clients() {
           onSelect={(client) => {
             setSearchOpen(false)
             setSelectedClient(client)
+          }}
+        />
+        <BulkClientDeleteDialog
+          open={bulkDeleteOpen}
+          token={token}
+          clientIds={actionableSelectedClientIds}
+          imports={selectedImportRecords}
+          onClose={() => setBulkDeleteOpen(false)}
+          onDeleted={() => {
+            const count = selectedCount
+            setBulkDeleteOpen(false)
+            setSelectedClientIds(new Set())
+            setSelectedImports({})
+            setRefreshKey((current) => current + 1)
+            setImportRefreshKey((current) => current + 1)
+            setToast({ message: `${count} selected client${count === 1 ? '' : 's'} deleted`, type: 'success' })
           }}
         />
       </section>
