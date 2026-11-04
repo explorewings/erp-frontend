@@ -8,7 +8,7 @@ import Calendar from './erplayout/pages/calendar.jsx'
 import Resorts from './resorts/pages/resorts.jsx'
 import Packages from './packages/pages/packages.jsx'
 import Clients from './clients/pages/clients.jsx'
-import Crm from './erplayout/pages/crm.jsx'
+import Crm from './crm/pages/crm.jsx'
 import Settings from './settings/pages/settings.jsx'
 
 function RequireAuth({ children }) {
