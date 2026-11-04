@@ -226,8 +226,27 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
           </button>
         </header>
 
-        <div className="border-b px-5 py-3" style={{ borderColor: 'var(--ew-line)' }}>
+        <div className="flex items-center justify-between gap-4 border-b px-5 py-3" style={{ borderColor: 'var(--ew-line)' }}>
           <TabBar activeTab={activeTab} onTabChange={setActiveTab} tabRefs={tabRefs} sliderStyle={sliderStyle} />
+          {activeTab === 'create' ? (
+            <div className="relative flex w-2/5 shrink-0 items-center justify-between gap-2 px-2">
+              <div className="absolute left-4 right-4 top-1/2 h-px -translate-y-1/2 bg-[var(--ew-line)]" />
+              {[1, 2, 3].map((step) => (
+                <button
+                  key={step}
+                  type="button"
+                  onClick={() => setCreateStep(step)}
+                  className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-colors ${
+                    createStep === step
+                      ? 'border-[#cc785c] bg-[#cc785c] text-white'
+                      : 'border-[var(--ew-line)] bg-surface text-[var(--ew-muted)]'
+                  }`}
+                >
+                  {step}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -283,7 +302,7 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
             </div>
           ) : (
             <form onSubmit={handleCreate} className="space-y-4">
-              <div className="flex items-end gap-4">
+              {createStep === 1 ? (
                 <label className="block w-3/5 shrink-0">
                   <input
                     type="text"
@@ -291,28 +310,35 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Enter pipeline name"
                     maxLength={100}
-                    className="mt-1 h-9 w-full rounded-xs border bg-surface px-3 text-sm text-[var(--ew-ink)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                    className="h-9 w-full rounded-xs border bg-surface px-3 text-sm text-[var(--ew-ink)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
                     style={{ borderColor: 'var(--ew-field-line)' }}
                   />
                 </label>
-                <div className="relative flex w-2/5 shrink-0 items-center justify-between gap-2 px-2">
-                  <div className="absolute left-4 right-4 top-1/2 h-px -translate-y-1/2 bg-[var(--ew-line)]" />
-                  {[1, 2, 3].map((step) => (
-                    <button
-                      key={step}
-                      type="button"
-                      onClick={() => setCreateStep(step)}
-                      className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-colors ${
-                        createStep === step
-                          ? 'border-[#cc785c] bg-[#cc785c] text-white'
-                          : 'border-[var(--ew-line)] bg-surface text-[var(--ew-muted)]'
-                      }`}
-                    >
-                      {step}
-                    </button>
-                  ))}
+              ) : createStep === 2 ? (
+                <div className="flex w-3/5 shrink-0 gap-2">
+                  <input
+                    type="text"
+                    value={stageDraft}
+                    onChange={(event) => setStageDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        addStage(selectedTemplate)
+                      }
+                    }}
+                    placeholder="Add stage"
+                    className="h-9 flex-1 rounded-xs border bg-surface px-3 text-sm text-[var(--ew-ink)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                    style={{ borderColor: 'var(--ew-field-line)' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addStage(selectedTemplate)}
+                    className="h-9 rounded-xs bg-[#cc785c] px-4 text-sm font-medium text-white"
+                  >
+                    Add
+                  </button>
                 </div>
-              </div>
+              ) : null}
 
               {createStep === 1 && (
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -423,29 +449,6 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
                       </li>
                     ))}
                   </ul>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={stageDraft}
-                      onChange={(event) => setStageDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          addStage(selectedTemplate)
-                        }
-                      }}
-                      placeholder="Add stage"
-                      className="h-9 flex-1 rounded-xs border bg-surface px-3 text-sm text-[var(--ew-ink)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-                      style={{ borderColor: 'var(--ew-field-line)' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => addStage(selectedTemplate)}
-                      className="h-9 rounded-xs bg-[#cc785c] px-4 text-sm font-medium text-white"
-                    >
-                      Add
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -497,7 +500,8 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
                   <button
                     type="button"
                     onClick={() => setCreateStep((step) => Math.min(3, step + 1))}
-                    className="rounded-xs bg-[#cc785c] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e]"
+                    disabled={createStep === 1 && !name.trim()}
+                    className="rounded-xs bg-[#cc785c] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-40"
                   >
                     Next
                   </button>
