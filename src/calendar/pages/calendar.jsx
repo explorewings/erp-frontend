@@ -1,5 +1,5 @@
 import { CalendarIcon } from '../../components/icons.jsx'
-import SectionPending from '../components/section-pending.jsx'
+import SectionPending from '../../erplayout/components/section-pending.jsx'
 
 export default function Calendar() {
   return (
