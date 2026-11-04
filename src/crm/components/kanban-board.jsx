@@ -48,7 +48,7 @@ export default function KanbanBoard({
 
   if (!hasPipeline) {
     return (
-      <div className="flex min-h-[22rem] flex-1 items-center justify-center rounded-control border border-dashed text-center" style={{ borderColor: 'var(--ew-line)' }}>
+      <div className="flex min-h-[22rem] flex-1 items-center justify-center rounded-control border border-dashed bg-ground/60 text-center" style={{ borderColor: 'var(--ew-line)' }}>
         <div className="px-6">
           <button
             type="button"
@@ -67,7 +67,7 @@ export default function KanbanBoard({
 
   if (stages.length === 0) {
     return (
-      <div className="flex min-h-[22rem] flex-1 items-center justify-center rounded-control border border-dashed text-center" style={{ borderColor: 'var(--ew-line)' }}>
+      <div className="flex min-h-[22rem] flex-1 items-center justify-center rounded-control border border-dashed bg-ground/60 text-center" style={{ borderColor: 'var(--ew-line)' }}>
         <p className="px-6 text-sm text-[var(--ew-muted)]">This pipeline has no stages yet.</p>
       </div>
     )
@@ -91,8 +91,8 @@ export default function KanbanBoard({
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
       <div
         ref={scrollerRef}
-        className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden pb-3"
-        style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--ew-line) transparent' }}
+        className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden rounded-control border bg-ground/40 pb-3"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--ew-line) transparent', borderColor: 'var(--ew-line)' }}
         aria-label="Pipeline board"
       >
         <div className="flex h-full min-w-max items-stretch gap-3">

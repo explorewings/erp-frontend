@@ -15,6 +15,8 @@ import { useAuth } from '../../authetication/auth-context.js'
 import CrmSearchModal from '../components/crm-search-modal.jsx'
 import KanbanBoard from '../components/kanban-board.jsx'
 import ManagePipelineModal from '../components/managepipelinemodal.jsx'
+import { fetchCrmPipelines } from '../api.js'
+import Loader from '../../appcomponents/loader.jsx'
 
 const TABS = [
   { id: 'pipeline', label: 'Pipeline' },
@@ -54,9 +56,34 @@ export default function Crm() {
   const [activeTab, setActiveTab] = useState('pipeline')
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [pipelines, setPipelines] = useState([])
   const [isPipelineModalOpen, setIsPipelineModalOpen] = useState(false)
+  const [isLoadingPipelines, setIsLoadingPipelines] = useState(false)
+
+  useEffect(() => {
+    if (!token) return undefined
+    let cancelled = false
+    setIsLoadingPipelines(true)
+    fetchCrmPipelines(token)
+      .then((result) => {
+        if (cancelled) return
+        const list = Array.isArray(result) ? result : result?.items || []
+        setPipelines(list)
+        if (list.length > 0) {
+          setSelectedPipelineId((current) => (current ? current : String(list[0].id)))
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPipelines([])
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingPipelines(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token])
   const [pipelineModalTab, setPipelineModalTab] = useState('manage')
 
   const openPipelineModal = (tab = 'manage') => {
@@ -219,13 +246,19 @@ export default function Crm() {
           aria-labelledby="crm-tab-pipeline"
           className="flex min-h-0 flex-1 flex-col"
         >
-          <KanbanBoard
-            scrollerRef={boardScrollerRef}
-            stages={stages}
-            deals={visibleDeals}
-            hasPipeline={Boolean(selectedPipeline)}
-            onCreatePipeline={() => openPipelineModal('create')}
-          />
+          {isLoadingPipelines ? (
+            <div className="flex min-h-[22rem] flex-1 items-center justify-center rounded-control border border-dashed bg-ground/60" style={{ borderColor: 'var(--ew-line)' }}>
+              <Loader size={1.8} />
+            </div>
+          ) : (
+            <KanbanBoard
+              scrollerRef={boardScrollerRef}
+              stages={stages}
+              deals={visibleDeals}
+              hasPipeline={Boolean(selectedPipeline)}
+              onCreatePipeline={() => openPipelineModal('create')}
+            />
+          )}
         </div>
       ) : (
         <div
@@ -283,6 +316,7 @@ export default function Crm() {
       <ManagePipelineModal
         open={isPipelineModalOpen}
         token={token}
+        user={user}
         onClose={() => setIsPipelineModalOpen(false)}
         initialTab={pipelineModalTab}
         onCreated={(created) => {

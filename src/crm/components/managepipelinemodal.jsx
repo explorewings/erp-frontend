@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { LuCheck, LuPencil, LuSettings2, LuTrash2, LuX } from 'react-icons/lu'
-import { createCrmPipeline, fetchCrmPipelines } from '../api.js'
+import { createCrmPipeline, fetchCrmPipelines, fetchCrmUsers } from '../api.js'
 import Loader from '../../appcomponents/loader.jsx'
 
 const TABS = [
@@ -59,7 +59,7 @@ function TabBar({ activeTab, onTabChange, tabRefs, sliderStyle }) {
   )
 }
 
-export default function ManagePipelineModal({ open, token, onClose, onCreated, initialTab = 'manage' }) {
+export default function ManagePipelineModal({ open, token, user, onClose, onCreated, initialTab = 'manage' }) {
   const [activeTab, setActiveTab] = useState('manage')
   const [pipelines, setPipelines] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -76,6 +76,8 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
   const [createError, setCreateError] = useState('')
   const [createStep, setCreateStep] = useState(1)
   const [draggedStageIndex, setDraggedStageIndex] = useState(null)
+  const [availableUsers, setAvailableUsers] = useState([])
+  const [allowedUserIds, setAllowedUserIds] = useState([])
   const [editingStageIndex, setEditingStageIndex] = useState(null)
   const [stageEditDraft, setStageEditDraft] = useState('')
 
@@ -100,6 +102,15 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
     let cancelled = false
     setIsLoading(true)
     setLoadError('')
+    fetchCrmUsers(token)
+      .then((result) => {
+        if (cancelled) return
+        const users = Array.isArray(result) ? result : result?.items || []
+        setAvailableUsers(users)
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableUsers([])
+      })
     fetchCrmPipelines(token)
       .then((result) => {
         if (cancelled) return
@@ -126,9 +137,11 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
       setStageDraft('')
       setCreateStep(1)
       setDraggedStageIndex(null)
+      setAllowedUserIds([])
       return
     }
     setActiveTab(initialTab === 'create' ? 'create' : 'manage')
+    if (user?.id) setAllowedUserIds([user.id])
   }, [open, initialTab])
 
   if (!open) return null
@@ -176,6 +189,7 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
         name: name.trim(),
         template: selectedTemplate,
         stages: templateStages[selectedTemplate] || [],
+        allowedUserIds,
       })
       onCreated?.(created)
       setPipelines((current) => [created, ...current.filter((pipeline) => pipeline.id !== created.id)])
@@ -232,18 +246,17 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
             <div className="relative flex w-2/5 shrink-0 items-center justify-between gap-2 px-2">
               <div className="absolute left-4 right-4 top-1/2 h-px -translate-y-1/2 bg-[var(--ew-line)]" />
               {[1, 2, 3].map((step) => (
-                <button
+                <div
                   key={step}
-                  type="button"
-                  onClick={() => setCreateStep(step)}
-                  className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-colors ${
+                  aria-current={createStep === step ? 'step' : undefined}
+                  className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold ${
                     createStep === step
                       ? 'border-[#cc785c] bg-[#cc785c] text-white'
                       : 'border-[var(--ew-line)] bg-surface text-[var(--ew-muted)]'
                   }`}
                 >
                   {step}
-                </button>
+                </div>
               ))}
             </div>
           ) : null}
@@ -273,7 +286,7 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
                   <p className="mt-1 text-xs text-[var(--ew-muted)]">Switch to Create to make your first pipeline.</p>
                 </div>
               ) : (
-                <ul className="space-y-2">
+                <ul className="min-h-40 space-y-2">
                   {pipelines.map((pipeline) => (
                     <li
                       key={pipeline.id}
@@ -455,28 +468,42 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
               {createStep === 3 && (
                 <div className="space-y-3 rounded-control border p-4" style={{ borderColor: 'var(--ew-line)' }}>
                   <div>
-                    <p className="text-xs text-[var(--ew-muted)]">Template</p>
-                    <p className="text-sm font-semibold text-[var(--ew-ink)]">
-                      {TEMPLATES.find((template) => template.key === selectedTemplate)?.title}
+                    <p className="text-xs text-[var(--ew-muted)]">Allowed users</p>
+                    <p className="mt-1 text-xs text-[var(--ew-muted)]">
+                      Superadmins always retain access. Pipeline creator is included automatically.
                     </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[var(--ew-muted)]">Stages</p>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {(templateStages[selectedTemplate] || []).map((stage, index) => (
-                        <span key={`${stage}-${index}`} className="rounded-xs bg-ground px-2 py-0.5 text-xs text-[var(--ew-ink)]">
-                          {stage}
-                        </span>
-                      ))}
+                    <div className="mt-2 max-h-40 space-y-1 overflow-y-auto pr-1">
+                      {availableUsers
+                        .filter((candidate) => candidate.status !== 'inactive')
+                        .map((candidate) => {
+                          const isSuper = candidate.role === 'superadmin' || candidate.role === 'superuser'
+                          const isCreator = candidate.id === user?.id
+                          const checked = allowedUserIds.includes(candidate.id) || isSuper
+                          const disabled = isSuper || isCreator
+                          return (
+                            <label
+                              key={candidate.id}
+                              className="flex items-center gap-2 rounded-xs px-1 py-1 text-sm text-[var(--ew-ink)]"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={disabled}
+                                onChange={(event) => {
+                                  setAllowedUserIds((current) => {
+                                    if (event.target.checked) return [...new Set([...current, candidate.id])]
+                                    return current.filter((id) => id !== candidate.id)
+                                  })
+                                }}
+                              />
+                              <span className="min-w-0 flex-1 truncate">
+                                {candidate.username} ({candidate.role})
+                              </span>
+                            </label>
+                          )
+                        })}
                     </div>
                   </div>
-                  <button
-                    type="submit"
-                    disabled={isCreating || !name.trim()}
-                    className="h-9 rounded-xs bg-[#cc785c] px-4 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-60"
-                  >
-                    {isCreating ? 'Creating…' : 'Create pipeline'}
-                  </button>
                 </div>
               )}
 
@@ -496,16 +523,27 @@ export default function ManagePipelineModal({ open, token, onClose, onCreated, i
                 >
                   Previous
                 </button>
-                {createStep < 3 && (
-                  <button
-                    type="button"
-                    onClick={() => setCreateStep((step) => Math.min(3, step + 1))}
-                    disabled={createStep === 1 && !name.trim()}
-                    className="rounded-xs bg-[#cc785c] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-40"
-                  >
-                    Next
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {createStep === 3 && (
+                    <button
+                      type="submit"
+                      disabled={isCreating || !name.trim()}
+                      className="h-9 rounded-xs bg-[#cc785c] px-4 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-60"
+                    >
+                      {isCreating ? 'Creating...' : 'Create pipeline'}
+                    </button>
+                  )}
+                  {createStep < 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setCreateStep((step) => Math.min(3, step + 1))}
+                      disabled={createStep === 1 && !name.trim()}
+                      className="rounded-xs bg-[#cc785c] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  )}
+                </div>
               </div>
             </form>
           )}

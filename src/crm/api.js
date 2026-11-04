@@ -29,3 +29,8 @@ export async function createCrmPipeline(token, payload) {
   })
   return readResponse(response, 'Unable to create pipeline.')
 }
+
+export async function fetchCrmUsers(token) {
+  const response = await fetch(`${API_BASE_URL}/settings/users`, { headers: authHeaders(token) })
+  return readResponse(response, 'Unable to load users.')
+}
