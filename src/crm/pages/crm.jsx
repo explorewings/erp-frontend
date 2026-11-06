@@ -15,6 +15,8 @@ import { useAuth } from '../../authetication/auth-context.js'
 import CrmSearchModal from '../components/crm-search-modal.jsx'
 import KanbanBoard from '../components/kanban-board.jsx'
 import ManagePipelineModal from '../components/managepipelinemodal.jsx'
+import ManageStageDrawer from '../components/manage-stage-drawer.jsx'
+import PipelineSelect from '../components/pipeline-select.jsx'
 import { fetchCrmPipelines } from '../api.js'
 import Loader from '../../appcomponents/loader.jsx'
 
@@ -59,6 +61,7 @@ export default function Crm() {
   const { token, user } = useAuth()
   const [pipelines, setPipelines] = useState([])
   const [isPipelineModalOpen, setIsPipelineModalOpen] = useState(false)
+  const [isStageDrawerOpen, setIsStageDrawerOpen] = useState(false)
   const [isLoadingPipelines, setIsLoadingPipelines] = useState(false)
 
   useEffect(() => {
@@ -201,23 +204,14 @@ export default function Crm() {
               Select
             </button>
 
-            <select
+            <PipelineSelect
+              pipelines={pipelines}
               value={selectedPipelineId}
-              disabled={pipelines.length === 0}
-              onChange={(event) => {
-                setSelectedPipelineId(event.target.value)
+              onChange={(id) => {
+                setSelectedPipelineId(id)
                 setSearchQuery('')
               }}
-              aria-label="Select pipeline"
-              className="box-border h-10 min-h-10 min-w-40 shrink-0 rounded-xs border bg-surface px-3 text-sm font-medium text-[var(--ew-ink)] outline-none disabled:cursor-not-allowed disabled:opacity-70"
-              style={{ borderColor: 'var(--ew-line)' }}
-            >
-              {pipelines.length === 0
-                ? <option value="">No pipelines yet</option>
-                : pipelines.map((pipeline) => (
-                    <option key={pipeline.id} value={pipeline.id}>{pipeline.name}</option>
-                  ))}
-            </select>
+            />
 
             <button
               type="button"
@@ -271,24 +265,29 @@ export default function Crm() {
             .filter((action) => action.alwaysAvailable || selectedPipeline)
             .map(({ title, description, Icon }) => {
               const isManagePipeline = title === 'Manage pipeline'
+              const onOpen = isManagePipeline
+                ? () => openPipelineModal('manage')
+                : title === 'Manage stages'
+                  ? () => setIsStageDrawerOpen(true)
+                  : null
               return (
                 <article
                   key={title}
-                  role={isManagePipeline ? 'button' : undefined}
-                  tabIndex={isManagePipeline ? 0 : undefined}
-                  onClick={isManagePipeline ? () => openPipelineModal('manage') : undefined}
+                  role={onOpen ? 'button' : undefined}
+                  tabIndex={onOpen ? 0 : undefined}
+                  onClick={onOpen || undefined}
                   onKeyDown={
-                    isManagePipeline
+                    onOpen
                       ? (event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault()
-                            openPipelineModal('manage')
+                            onOpen()
                           }
                         }
                       : undefined
                   }
-                  className={`rounded-lg border p-5 ${
-                    isManagePipeline ? 'cursor-pointer transition-shadow hover:shadow-md' : ''
+                  className={`flex flex-col rounded-lg border p-5 ${
+                    onOpen ? 'cursor-pointer transition-shadow hover:shadow-md' : ''
                   }`}
                   style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
                 >
@@ -301,6 +300,16 @@ export default function Crm() {
                       <p className="mt-1 text-xs leading-relaxed text-[var(--ew-muted)]">{description}</p>
                     </div>
                   </div>
+                  {!isManagePipeline && selectedPipeline ? (
+                    <div className="mt-auto flex justify-end pt-3">
+                      <span
+                        title={selectedPipeline.name}
+                        className="max-w-[10rem] truncate rounded-[2px] bg-[#cc785c]/10 px-2 py-0.5 text-[11px] font-medium text-[#b76c4f]"
+                      >
+                        {selectedPipeline.name}
+                      </span>
+                    </div>
+                  ) : null}
                 </article>
               )
             })}
@@ -313,16 +322,45 @@ export default function Crm() {
         onSearch={setSearchQuery}
         onClose={() => setSearchOpen(false)}
       />
+      <ManageStageDrawer
+        open={isStageDrawerOpen && Boolean(selectedPipeline)}
+        token={token}
+        pipeline={selectedPipeline}
+        onClose={() => setIsStageDrawerOpen(false)}
+        onStagesChange={(pipelineId, nextStages) => {
+          setPipelines((current) =>
+            current.map((pipeline) =>
+              pipeline.id === pipelineId ? { ...pipeline, stages: nextStages } : pipeline,
+            ),
+          )
+        }}
+      />
       <ManagePipelineModal
         open={isPipelineModalOpen}
         token={token}
         user={user}
         onClose={() => setIsPipelineModalOpen(false)}
         initialTab={pipelineModalTab}
+        onRenamed={(renamed) => {
+          setPipelines((current) =>
+            current.map((pipeline) =>
+              pipeline.id === renamed.id ? { ...pipeline, name: renamed.name } : pipeline,
+            ),
+          )
+        }}
+        onDeleted={(deletedId) => {
+          const remaining = pipelines.filter((pipeline) => pipeline.id !== deletedId)
+          setPipelines(remaining)
+          if (selectedPipelineId === String(deletedId)) {
+            setIsStageDrawerOpen(false)
+            setSearchQuery('')
+            setSelectedPipelineId(remaining.length > 0 ? String(remaining[0].id) : '')
+          }
+        }}
         onCreated={(created) => {
           setPipelines((current) => [
-            created,
             ...current.filter((pipeline) => pipeline.id !== created.id),
+            created,
           ])
           if (created?.id) setSelectedPipelineId(String(created.id))
         }}

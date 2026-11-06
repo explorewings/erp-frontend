@@ -34,3 +34,45 @@ export async function fetchCrmUsers(token) {
   const response = await fetch(`${API_BASE_URL}/settings/users`, { headers: authHeaders(token) })
   return readResponse(response, 'Unable to load users.')
 }
+
+export async function renameCrmStage(token, pipelineId, stageId, name) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/stages/${stageId}`, {
+    method: 'PATCH',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ name }),
+  })
+  return readResponse(response, 'Unable to rename stage.')
+}
+
+export async function reorderCrmStages(token, pipelineId, stageIds) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/stages/order`, {
+    method: 'PUT',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ stageIds }),
+  })
+  return readResponse(response, 'Unable to save stage order.')
+}
+
+export async function renameCrmPipeline(token, pipelineId, name) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}`, {
+    method: 'PATCH',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ name }),
+  })
+  return readResponse(response, 'Unable to rename pipeline.')
+}
+
+export async function fetchCrmPipelineDeleteImpact(token, pipelineId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/delete-impact`, {
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to load what will be deleted.')
+}
+
+export async function deleteCrmPipeline(token, pipelineId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to delete pipeline.')
+}

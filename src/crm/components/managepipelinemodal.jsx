@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { LuCheck, LuPencil, LuSettings2, LuTrash2, LuX } from 'react-icons/lu'
-import { createCrmPipeline, fetchCrmPipelines, fetchCrmUsers } from '../api.js'
+import { LuCheck, LuPencil, LuTrash2, LuX } from 'react-icons/lu'
+import {
+  createCrmPipeline,
+  deleteCrmPipeline,
+  fetchCrmPipelineDeleteImpact,
+  fetchCrmPipelines,
+  fetchCrmUsers,
+  renameCrmPipeline,
+} from '../api.js'
 import Loader from '../../appcomponents/loader.jsx'
 
 const TABS = [
@@ -22,6 +29,14 @@ const TEMPLATES = [
     stages: ['Onboarding', 'Verification', 'Active', 'Renewal', 'Closed'],
   },
 ]
+
+const defaultTemplateStages = () =>
+  Object.fromEntries(TEMPLATES.map((template) => [template.key, [...template.stages]]))
+
+const hasStageNamed = (stages, value, ignoreIndex = -1) => {
+  const key = value.toLocaleLowerCase()
+  return stages.some((stage, index) => index !== ignoreIndex && stage.toLocaleLowerCase() === key)
+}
 
 function TabBar({ activeTab, onTabChange, tabRefs, sliderStyle }) {
   return (
@@ -59,18 +74,40 @@ function TabBar({ activeTab, onTabChange, tabRefs, sliderStyle }) {
   )
 }
 
-export default function ManagePipelineModal({ open, token, user, onClose, onCreated, initialTab = 'manage' }) {
+export default function ManagePipelineModal({
+  open,
+  token,
+  user,
+  onClose,
+  onCreated,
+  onRenamed,
+  onDeleted,
+  initialTab = 'manage',
+}) {
   const [activeTab, setActiveTab] = useState('manage')
   const [pipelines, setPipelines] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [reloadTick, setReloadTick] = useState(0)
 
+  // Manage tab: inline rename
+  const [renamingId, setRenamingId] = useState(null)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [isSavingRename, setIsSavingRename] = useState(false)
+  const [manageError, setManageError] = useState('')
+
+  // Manage tab: delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deletePanelId, setDeletePanelId] = useState(null)
+  const impactRequestRef = useRef(0)
+  const [deleteImpact, setDeleteImpact] = useState(null)
+  const [isLoadingImpact, setIsLoadingImpact] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+
   const [name, setName] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState(TEMPLATES[0].key)
-  const [templateStages, setTemplateStages] = useState(
-    Object.fromEntries(TEMPLATES.map((template) => [template.key, [...template.stages]])),
-  )
+  const [templateStages, setTemplateStages] = useState(defaultTemplateStages)
   const [stageDraft, setStageDraft] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -138,6 +175,16 @@ export default function ManagePipelineModal({ open, token, user, onClose, onCrea
       setCreateStep(1)
       setDraggedStageIndex(null)
       setAllowedUserIds([])
+      setTemplateStages(defaultTemplateStages())
+      setRenamingId(null)
+      setRenameDraft('')
+      setManageError('')
+      setDeleteTarget(null)
+      setDeletePanelId(null)
+      setDeleteImpact(null)
+      setDeleteError('')
+      setEditingStageIndex(null)
+      setStageEditDraft('')
       return
     }
     setActiveTab(initialTab === 'create' ? 'create' : 'manage')
@@ -146,9 +193,115 @@ export default function ManagePipelineModal({ open, token, user, onClose, onCrea
 
   if (!open) return null
 
+  const stageCount = (templateStages[selectedTemplate] || []).length
+
+  const startRename = (pipeline) => {
+    setRenamingId(pipeline.id)
+    setRenameDraft(pipeline.name)
+    setManageError('')
+  }
+
+  const cancelRename = () => {
+    setRenamingId(null)
+    setRenameDraft('')
+  }
+
+  const saveRename = async () => {
+    const pipeline = pipelines.find((item) => item.id === renamingId)
+    if (!pipeline) return
+    const nextName = renameDraft.trim()
+    if (!nextName) {
+      setManageError('Pipeline name is required.')
+      return
+    }
+    if (nextName === pipeline.name) {
+      cancelRename()
+      return
+    }
+    setIsSavingRename(true)
+    setManageError('')
+    try {
+      const updated = await renameCrmPipeline(token, pipeline.id, nextName)
+      setPipelines((current) =>
+        current.map((item) => (item.id === updated.id ? { ...item, name: updated.name } : item)),
+      )
+      onRenamed?.(updated)
+      cancelRename()
+    } catch (error) {
+      setManageError(error?.message || 'Unable to rename pipeline.')
+    } finally {
+      setIsSavingRename(false)
+    }
+  }
+
+  const openDeleteConfirm = async (pipeline) => {
+    if (deleteTarget?.id === pipeline.id) {
+      closeDeleteConfirm()
+      return
+    }
+    setDeleteTarget(pipeline)
+    setDeletePanelId(pipeline.id)
+    setDeleteImpact(null)
+    setDeleteError('')
+    setIsLoadingImpact(true)
+    // Ignore a slow response for a pipeline that is no longer the one being confirmed.
+    const requestId = ++impactRequestRef.current
+    try {
+      const impact = await fetchCrmPipelineDeleteImpact(token, pipeline.id)
+      if (requestId === impactRequestRef.current) setDeleteImpact(impact)
+    } catch (error) {
+      if (requestId === impactRequestRef.current) {
+        setDeleteError(error?.message || 'Unable to load what will be deleted.')
+      }
+    } finally {
+      if (requestId === impactRequestRef.current) setIsLoadingImpact(false)
+    }
+  }
+
+  const closeDeleteConfirm = () => {
+    if (isDeleting) return
+    setDeleteTarget(null)
+    setDeleteError('')
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || !deleteImpact) return
+    setIsDeleting(true)
+    setDeleteError('')
+    try {
+      await deleteCrmPipeline(token, deleteTarget.id)
+      setPipelines((current) => current.filter((item) => item.id !== deleteTarget.id))
+      onDeleted?.(deleteTarget.id)
+      setDeleteTarget(null)
+      setDeleteImpact(null)
+    } catch (error) {
+      setDeleteError(error?.message || 'Unable to delete pipeline.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
+  const describeDelete = (pipeline) => {
+    if (isLoadingImpact) return 'Checking what this pipeline contains...'
+    if (!deleteImpact) return 'This pipeline could not be checked, so it cannot be deleted right now.'
+    return (
+      `This permanently deletes the pipeline with its ${plural(deleteImpact.stageCount, 'stage')}` +
+      (deleteImpact.dealCount > 0
+        ? ` and ${plural(deleteImpact.dealCount, 'deal')}. The clients stay in Clients.`
+        : '. It has no deals.') +
+      ' This cannot be undone.'
+    )
+  }
+
   const addStage = (templateKey) => {
     const value = stageDraft.trim()
     if (!value) return
+    if (hasStageNamed(templateStages[templateKey] || [], value)) {
+      setCreateError(`Stage "${value}" already exists.`)
+      return
+    }
+    setCreateError('')
     setTemplateStages((current) => ({
       ...current,
       [templateKey]: [...(current[templateKey] || []), value],
@@ -166,6 +319,11 @@ export default function ManagePipelineModal({ open, token, user, onClose, onCrea
   const saveStageEdit = (templateKey, index) => {
     const value = stageEditDraft.trim()
     if (!value) return
+    if (hasStageNamed(templateStages[templateKey] || [], value, index)) {
+      setCreateError(`Stage "${value}" already exists.`)
+      return
+    }
+    setCreateError('')
     setTemplateStages((current) => {
       const stages = [...(current[templateKey] || [])]
       stages[index] = value
@@ -179,7 +337,19 @@ export default function ManagePipelineModal({ open, token, user, onClose, onCrea
     event.preventDefault()
     if (!name.trim()) {
       setCreateError('Pipeline name is required.')
-      setCreateStep(3)
+      setCreateStep(1)
+      return
+    }
+    // Pressing Enter in the name field submits the form implicitly; only the
+    // final step may actually create the pipeline.
+    if (createStep < 3) {
+      if (createStep === 2 && stageCount === 0) return
+      setCreateStep((step) => Math.min(3, step + 1))
+      return
+    }
+    if (stageCount === 0) {
+      setCreateError('Add at least one stage.')
+      setCreateStep(2)
       return
     }
     setIsCreating(true)
@@ -192,7 +362,7 @@ export default function ManagePipelineModal({ open, token, user, onClose, onCrea
         allowedUserIds,
       })
       onCreated?.(created)
-      setPipelines((current) => [created, ...current.filter((pipeline) => pipeline.id !== created.id)])
+      setPipelines((current) => [...current.filter((pipeline) => pipeline.id !== created.id), created])
       setName('')
       setCreateStep(1)
       setActiveTab('manage')
@@ -290,27 +460,166 @@ export default function ManagePipelineModal({ open, token, user, onClose, onCrea
                   {pipelines.map((pipeline) => (
                     <li
                       key={pipeline.id}
-                      className="flex items-center justify-between rounded-control border px-3 py-3"
-                      style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
+                      className="rounded-control border px-3 py-3 transition-colors"
+                      style={{
+                        borderColor: deleteTarget?.id === pipeline.id ? 'rgba(220, 38, 38, 0.35)' : 'var(--ew-line)',
+                        background: 'var(--ew-surface)',
+                      }}
                     >
-                      <div className="min-w-0">
-                        <h3 className="truncate text-sm font-semibold text-[var(--ew-ink)]">{pipeline.name}</h3>
+                      <div
+                        className={`flex justify-between ${
+                          renamingId === pipeline.id ? 'items-start' : 'items-center'
+                        }`}
+                      >
+                      <div className="min-w-0 flex-1">
+                        {renamingId === pipeline.id ? (
+                          <input
+                            type="text"
+                            value={renameDraft}
+                            maxLength={100}
+                            autoFocus
+                            disabled={isSavingRename}
+                            aria-label={`New name for ${pipeline.name}`}
+                            onChange={(event) => setRenameDraft(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault()
+                                saveRename()
+                              }
+                              if (event.key === 'Escape') {
+                                event.preventDefault()
+                                cancelRename()
+                              }
+                            }}
+                            className="h-8 w-full rounded-xs border bg-surface px-2 text-sm text-[var(--ew-ink)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
+                            style={{ borderColor: 'var(--ew-field-line)' }}
+                          />
+                        ) : (
+                          <h3 className="truncate text-sm font-semibold text-[var(--ew-ink)]" title={pipeline.name}>
+                            {pipeline.name}
+                          </h3>
+                        )}
                         <p className="text-xs text-[var(--ew-muted)]">
                           {Array.isArray(pipeline.stages)
                             ? `${pipeline.stages.length} stage${pipeline.stages.length === 1 ? '' : 's'}`
                             : 'Pipeline'}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        aria-label={`Settings for ${pipeline.name}`}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xs text-[var(--ew-muted)] transition-colors hover:bg-ground/70"
-                      >
-                        <LuSettings2 className="h-4 w-4" />
-                      </button>
+                      {pipeline.canManage ? (
+                        <div className="ml-3 flex shrink-0 items-center gap-1">
+                          {renamingId === pipeline.id ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={saveRename}
+                                disabled={isSavingRename}
+                                aria-label="Save pipeline name"
+                                className="flex h-8 w-8 items-center justify-center rounded-xs border border-[#cc785c] text-[#cc785c] transition-colors hover:bg-[#cc785c]/10 disabled:opacity-60"
+                              >
+                                <LuCheck className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelRename}
+                                disabled={isSavingRename}
+                                aria-label="Cancel rename"
+                                className="flex h-8 w-8 items-center justify-center rounded-xs border text-[var(--ew-muted)] transition-colors hover:text-[var(--ew-ink)] disabled:opacity-60"
+                                style={{ borderColor: 'var(--ew-line)' }}
+                              >
+                                <LuX className="h-4 w-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => startRename(pipeline)}
+                                disabled={renamingId !== null || deleteTarget !== null}
+                                aria-label={`Rename ${pipeline.name}`}
+                                className="flex h-8 w-8 items-center justify-center rounded-xs text-[var(--ew-muted)] transition-colors hover:bg-ground/70 hover:text-[#cc785c] disabled:opacity-40"
+                              >
+                                <LuPencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openDeleteConfirm(pipeline)}
+                                disabled={renamingId !== null || isDeleting}
+                                aria-label={`Delete ${pipeline.name}`}
+                                aria-expanded={deleteTarget?.id === pipeline.id}
+                                aria-controls={`pipeline-delete-${pipeline.id}`}
+                                className={`flex h-8 w-8 items-center justify-center rounded-xs transition-colors hover:bg-ground/70 hover:text-danger disabled:opacity-40 ${
+                                  deleteTarget?.id === pipeline.id ? 'bg-danger/10 text-danger' : 'text-[var(--ew-muted)]'
+                                }`}
+                              >
+                                <LuTrash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ) : null}
+                      </div>
+
+                      {pipeline.canManage ? (
+                        <div
+                          id={`pipeline-delete-${pipeline.id}`}
+                          aria-hidden={deleteTarget?.id !== pipeline.id}
+                          className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                            deleteTarget?.id === pipeline.id ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                          }`}
+                        >
+                          <div className="min-h-0 overflow-hidden">
+                            {deletePanelId === pipeline.id ? (
+                              <div
+                                role="region"
+                                aria-label={`Delete ${pipeline.name}`}
+                                className="mt-3 rounded-xs border border-danger/30 bg-danger/5 px-3 py-3"
+                              >
+                                <p className="text-sm font-semibold text-danger">Delete this pipeline?</p>
+                                <p className="mt-1 text-xs leading-relaxed text-[var(--ew-muted)]">
+                                  {describeDelete(pipeline)}
+                                </p>
+                                {deleteError && (
+                                  <p role="alert" className="mt-2 text-xs font-medium text-danger">
+                                    {deleteError}
+                                  </p>
+                                )}
+                                <div className="mt-3 flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={closeDeleteConfirm}
+                                    disabled={isDeleting || deleteTarget?.id !== pipeline.id}
+                                    className="rounded-xs border bg-surface px-3 py-1.5 text-xs font-medium text-[var(--ew-muted)] transition-colors hover:text-[var(--ew-ink)] disabled:opacity-60"
+                                    style={{ borderColor: 'var(--ew-line)' }}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={confirmDelete}
+                                    disabled={
+                                      isDeleting ||
+                                      isLoadingImpact ||
+                                      !deleteImpact ||
+                                      deleteTarget?.id !== pipeline.id
+                                    }
+                                    className="rounded-xs bg-danger px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-danger-strong disabled:opacity-60"
+                                  >
+                                    {isDeleting ? 'Deleting...' : 'Delete pipeline'}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
+              )}
+              {manageError && (
+                <div className="mt-3 rounded-control border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">
+                  {manageError}
+                </div>
               )}
             </div>
           ) : (
@@ -537,7 +846,7 @@ export default function ManagePipelineModal({ open, token, user, onClose, onCrea
                     <button
                       type="button"
                       onClick={() => setCreateStep((step) => Math.min(3, step + 1))}
-                      disabled={createStep === 1 && !name.trim()}
+                      disabled={(createStep === 1 && !name.trim()) || (createStep === 2 && stageCount === 0)}
                       className="rounded-xs bg-[#cc785c] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-40"
                     >
                       Next
