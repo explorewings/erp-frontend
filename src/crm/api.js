@@ -76,3 +76,29 @@ export async function deleteCrmPipeline(token, pipelineId) {
   })
   return readResponse(response, 'Unable to delete pipeline.')
 }
+
+export async function fetchCrmDeals(token, pipelineId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/deals`, {
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to load deals.')
+}
+
+/** Creates a new client and adds it to the pipeline's first stage as a deal. */
+export async function createCrmDeal(token, pipelineId, client) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/deals`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ client }),
+  })
+  return readResponse(response, 'Unable to add deal.')
+}
+
+export async function moveCrmDeal(token, dealId, stageId) {
+  const response = await fetch(`${API_BASE_URL}/crm/deals/${dealId}`, {
+    method: 'PATCH',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ stageId }),
+  })
+  return readResponse(response, 'Unable to move deal.')
+}

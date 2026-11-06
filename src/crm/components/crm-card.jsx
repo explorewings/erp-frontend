@@ -1,97 +1,122 @@
-import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+import { useDraggable } from '@dnd-kit/core'
 import { LuGripVertical, LuMail, LuPhone } from 'react-icons/lu'
+import { dealDndId } from '../utils.js'
 
-const getInitials = (name = '') =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || '?'
+const dateFormat = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' })
+const datedFormat = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 
+function formatAdded(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const sameYear = date.getFullYear() === new Date().getFullYear()
+  return `Added ${(sameYear ? dateFormat : datedFormat).format(date)}`
+}
+
+/** Visual body of a deal card, shared by the board card and the drag overlay. */
+function DealCardBody({ deal, showGrip = true }) {
+  const { client } = deal
+  return (
+    <>
+      <div className="flex items-start gap-2">
+        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold leading-5 text-[var(--ew-ink)]" title={client.name}>
+          {client.name}
+        </h3>
+        {showGrip ? (
+          <LuGripVertical
+            className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ew-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+            aria-hidden="true"
+          />
+        ) : null}
+      </div>
+
+      {(client.email || client.phoneNumber) && (
+        <dl className="mt-2 space-y-1">
+          {client.phoneNumber && (
+            <div className="flex min-w-0 items-center gap-2 text-xs leading-5 text-[var(--ew-muted)]">
+              <dt className="shrink-0">
+                <LuPhone className="h-3.5 w-3.5" aria-label="Phone" />
+              </dt>
+              <dd className="min-w-0 truncate tabular-nums">{client.phoneNumber}</dd>
+            </div>
+          )}
+          {client.email && (
+            <div className="flex min-w-0 items-center gap-2 text-xs leading-5 text-[var(--ew-muted)]">
+              <dt className="shrink-0">
+                <LuMail className="h-3.5 w-3.5" aria-label="Email" />
+              </dt>
+              <dd className="min-w-0 truncate" title={client.email}>
+                {client.email}
+              </dd>
+            </div>
+          )}
+        </dl>
+      )}
+
+      <p className="mt-3 border-t border-[var(--ew-line)] pt-2 text-[11px] leading-4 tabular-nums text-[var(--ew-muted)]">
+        {formatAdded(deal.createdAt)}
+      </p>
+    </>
+  )
+}
+
+const cardSurface =
+  'relative rounded-[10px] border bg-[var(--ew-surface)] px-3 py-2.5'
+
+/**
+ * A deal on the board. While it is being dragged, the card stays in its column
+ * as a dashed slot and the moving copy is rendered by <DealCardOverlay>.
+ */
 export default function CrmCard({ deal, draggable = false }) {
   const client = deal?.client
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: `deal-${deal?.id}`, disabled: !client || !draggable })
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: dealDndId(deal?.id),
+    data: { deal },
+    disabled: !client || !draggable,
+  })
 
   if (!client) return null
+
+  if (isDragging) {
+    return (
+      <div
+        ref={setNodeRef}
+        aria-hidden="true"
+        className={`${cardSurface} border-dashed border-[#d9bfb1] bg-[#fbf3ee]`}
+      >
+        <div className="invisible">
+          <DealCardBody deal={deal} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <article
       ref={setNodeRef}
-      aria-label={`Deal for ${client.name}`}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition: isDragging ? 'none' : transition,
-        opacity: isDragging ? 0.97 : 1,
-        background: isDragging ? '#ffffff' : 'rgba(255,255,255,0.96)',
-        border: isDragging ? '1px solid #cc785c' : '1px solid rgba(255,255,255,0.95)',
-        borderRadius: '18px',
-        boxShadow: isDragging
-          ? '12px 16px 32px rgba(204,120,92,0.24), -8px -8px 20px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.95)'
-          : '8px 10px 22px rgba(221,194,178,0.48), -6px -6px 16px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.95), inset -2px -2px 4px rgba(247,232,224,0.85)',
-      }}
+      aria-label={`Deal: ${client.name}`}
       {...attributes}
       {...listeners}
-      className={`${draggable ? 'touch-none cursor-grab active:cursor-grabbing' : ''} group relative overflow-hidden p-3.5 focus-within:ring-4 focus-within:ring-[#d69375]/30 focus:outline-none`}
+      className={`group ${cardSurface} border-[#d9d2c9] shadow-[0_1px_2px_rgba(27,26,24,0.08),0_4px_10px_-6px_rgba(27,26,24,0.2)] outline-none transition-[background-color,border-color,box-shadow] duration-150 ease-out focus-visible:border-[var(--ew-accent-strong)] focus-visible:ring-2 focus-visible:ring-[var(--ew-accent)]/45 ${
+        draggable
+          ? 'cursor-grab touch-none hover:border-[#dfae95] hover:bg-[#fff8f3] hover:shadow-[0_1px_2px_rgba(27,26,24,0.08),0_8px_18px_-8px_rgba(183,108,79,0.32)]'
+          : ''
+      }`}
     >
-      <div className="absolute inset-x-0 top-0 h-1.5 bg-[#e8a88b]" aria-hidden="true" />
+      <DealCardBody deal={deal} showGrip={draggable} />
+    </article>
+  )
+}
 
-      <div className="flex items-start gap-3 pt-1.5">
-        <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center text-sm font-bold tracking-wide text-[#b76c4f]"
-          style={{
-            borderRadius: '14px',
-            background: '#f7e8e0',
-            border: '1px solid rgba(255,255,255,0.95)',
-            boxShadow: '4px 4px 10px rgba(221,194,178,0.5), -3px -3px 8px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.95), inset -2px -2px 4px rgba(221,194,178,0.45)',
-          }}
-          aria-hidden="true"
-        >
-          {getInitials(client.name)}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="truncate text-sm font-bold leading-5 tracking-[-0.01em] text-[var(--ew-ink)]">{client.name}</h3>
-            <LuGripVertical className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ew-muted)] opacity-60 transition group-hover:opacity-100" aria-hidden="true" />
-          </div>
-
-          {deal?.id != null && (
-            <p className="mt-0.5 text-[11px] font-semibold tracking-[0.08em] text-[var(--ew-muted)] uppercase tabular-nums">
-              Client deal #{deal.id}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div
-        className="mt-3 space-y-1.5 pt-3"
-        style={{
-          borderTop: '1px solid rgba(255,255,255,0.95)',
-          boxShadow: 'inset 0 1px 0 rgba(221,194,178,0.45)',
-        }}
-      >
-        {client.email && (
-          <p className="flex min-w-0 items-center gap-2 text-xs leading-5 text-[var(--ew-muted)]">
-            <LuMail className="h-3.5 w-3.5 shrink-0 text-[#b76c4f]" aria-hidden="true" />
-            <span className="truncate">{client.email}</span>
-          </p>
-        )}
-        {client.phoneNumber && (
-          <p className="flex min-w-0 items-center gap-2 text-xs leading-5 text-[var(--ew-muted)]">
-            <LuPhone className="h-3.5 w-3.5 shrink-0 text-[#b76c4f]" aria-hidden="true" />
-            <span className="truncate">{client.phoneNumber}</span>
-          </p>
-        )}
-      </div>
+/** The card as it follows the pointer: lifted, with a deeper shadow. */
+export function DealCardOverlay({ deal }) {
+  if (!deal?.client) return null
+  return (
+    <article
+      aria-hidden="true"
+      className={`crm-card-lift ${cardSurface} cursor-grabbing border-[var(--ew-accent)] shadow-[0_2px_4px_rgba(27,26,24,0.08),0_18px_36px_-12px_rgba(27,26,24,0.32)]`}
+    >
+      <DealCardBody deal={deal} showGrip={false} />
     </article>
   )
 }

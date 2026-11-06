@@ -12,11 +12,11 @@ import { CSS } from '@dnd-kit/utilities'
 import { LuCheck, LuGripVertical, LuLayers, LuPencil, LuX } from 'react-icons/lu'
 import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
 import { renameCrmStage, reorderCrmStages } from '../api.js'
+import { hasNameConflict, sortStages } from '../utils.js'
+import InlineError from './inline-error.jsx'
+import PipelineTag from './pipeline-tag.jsx'
 
 const MAX_STAGE_NAME = 100
-
-const sortStages = (stages) =>
-  [...(stages || [])].sort((a, b) => a.position - b.position || a.id - b.id)
 
 const sameOrder = (a, b) => a.length === b.length && a.every((stage, index) => stage.id === b[index].id)
 
@@ -190,14 +190,17 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
     }
   }
 
+  const closeDrawerRef = useRef(closeDrawer)
+  closeDrawerRef.current = closeDrawer
+
   useEffect(() => {
     if (!open) return undefined
     const handleKey = (event) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) closeDrawer()
+      if (event.key === 'Escape' && !event.defaultPrevented) closeDrawerRef.current()
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  })
+  }, [open])
 
   useEffect(() => {
     if (!open) return undefined
@@ -242,8 +245,8 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
       cancelEdit()
       return
     }
-    const key = name.toLocaleLowerCase()
-    if (order.some((item) => item.id !== stage.id && item.name.toLocaleLowerCase() === key)) {
+    const names = order.map((item) => item.name)
+    if (hasNameConflict(names, name, order.indexOf(stage))) {
       setError(`A stage named "${name}" already exists in this pipeline.`)
       return
     }
@@ -327,12 +330,7 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
               <h2 id="manage-stages-title" className="shrink-0 text-title text-[var(--ew-ink)]">
                 Manage stages
               </h2>
-              <span
-                title={pipeline.name}
-                className="min-w-0 max-w-[10rem] truncate rounded-[2px] bg-[#cc785c]/10 px-2 py-0.5 text-[11px] font-medium text-[#b76c4f]"
-              >
-                {pipeline.name}
-              </span>
+              <PipelineTag name={pipeline.name} />
             </div>
             <button
               type="button"
@@ -382,19 +380,7 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
               </DndContext>
             )}
 
-            {error && (
-              <div
-                role="alert"
-                className="rounded-xs border px-3 py-2 text-body-sm"
-                style={{
-                  borderColor: 'rgba(194, 65, 12, 0.28)',
-                  background: 'rgba(194, 65, 12, 0.06)',
-                  color: 'var(--ew-accent-strong)',
-                }}
-              >
-                {error}
-              </div>
-            )}
+            <InlineError>{error}</InlineError>
             {notice && !error && (
               <p role="status" className="text-xs text-[var(--ew-muted)]">
                 {notice}

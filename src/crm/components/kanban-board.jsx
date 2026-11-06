@@ -1,71 +1,126 @@
-import { useState } from 'react'
-import { DndContext, KeyboardSensor, PointerSensor, closestCorners, useDroppable, useSensor, useSensors } from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  defaultDropAnimationSideEffects,
+  pointerWithin,
+  rectIntersection,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
 import { LuPlus, LuLayers } from 'react-icons/lu'
-import CrmCard from './crm-card.jsx'
+import { stageDndId } from '../utils.js'
+import CrmCard, { DealCardOverlay } from './crm-card.jsx'
 
-const stageDndId = (id) => `stage-${id}`
-const dealDndId = (id) => `deal-${id}`
+const DROP_ANIMATION = {
+  duration: 200,
+  easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0' } } }),
+}
 
-function StageDeals({ stage, deals, onDealMove, activeDealId }) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: stageDndId(stage.id),
-    disabled: !onDealMove,
-  })
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
 
-  const isActiveTarget = Boolean(onDealMove && activeDealId)
-  const isDropping = Boolean(isOver && onDealMove)
 
+/**
+ * Keyboard dragging: Left/Right jump to the neighbouring column's centre,
+ * Up/Down nudge within the column.
+ */
+const columnKeyboardCoordinates = (event, { context }) => {
+  const { collisionRect, droppableRects, droppableContainers } = context
+  if (!collisionRect) return undefined
+
+  if (event.code === 'ArrowRight' || event.code === 'ArrowLeft') {
+    event.preventDefault()
+    const centerX = collisionRect.left + collisionRect.width / 2
+    const columns = droppableContainers
+      .getEnabled()
+      .map((container) => droppableRects.get(container.id))
+      .filter(Boolean)
+      .sort((a, b) => a.left - b.left)
+    const target =
+      event.code === 'ArrowRight'
+        ? columns.find((rect) => rect.left > centerX)
+        : [...columns].reverse().find((rect) => rect.left + rect.width < centerX)
+    if (!target) return undefined
+    return { x: target.left + target.width / 2 - collisionRect.width / 2, y: collisionRect.top }
+  }
+
+  if (event.code === 'ArrowDown' || event.code === 'ArrowUp') {
+    event.preventDefault()
+    return { x: collisionRect.left, y: collisionRect.top + (event.code === 'ArrowDown' ? 48 : -48) }
+  }
+  return undefined
+}
+
+/** A column's deal list. It looks the same whether or not a drag is in progress. */
+function StageDeals({ deals, onDealMove }) {
   return (
     <div
-      ref={setNodeRef}
-      aria-label={`${stage.name} drop zone`}
-      className={`min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5 transition-[background-color,border-color,box-shadow] duration-150 ${
-        isDropping
-          ? 'border-2 border-dashed bg-[#fff5ef]'
-          : isActiveTarget
-            ? 'border border-dashed bg-[#fff5ef]/70'
-            : 'border border-[var(--ew-line)] bg-white'
-      }`}
+      className="min-h-0 flex-1 space-y-2 overflow-y-auto border p-2.5"
       style={{
-        borderColor: isDropping ? 'var(--ew-accent-strong, #b76c4f)' : isActiveTarget ? '#e6c3b2' : 'rgba(255,255,255,0.9)',
+        borderColor: 'rgba(255,255,255,0.9)',
         borderRadius: '16px',
-        background: isDropping ? 'rgba(255,245,239,0.96)' : isActiveTarget ? 'rgba(255,245,239,0.72)' : 'rgba(255,255,255,0.58)',
-        boxShadow: isDropping
-          ? 'inset 3px 3px 8px rgba(183,108,79,0.18), inset -3px -3px 8px rgba(255,255,255,0.95), 8px 10px 22px rgba(221,194,178,0.45), -6px -6px 16px rgba(255,255,255,0.95)'
-          : 'inset 3px 3px 8px rgba(27,26,24,0.05), inset -3px -3px 8px rgba(255,255,255,0.95), 8px 10px 22px rgba(221,194,178,0.40), -6px -6px 16px rgba(255,255,255,0.95)',
+        background: 'rgba(255,255,255,0.58)',
+        boxShadow:
+          'inset 3px 3px 8px rgba(27,26,24,0.05), inset -3px -3px 8px rgba(255,255,255,0.95), 8px 10px 22px rgba(221,194,178,0.40), -6px -6px 16px rgba(255,255,255,0.95)',
       }}
     >
-      <SortableContext items={deals.map((deal) => dealDndId(deal.id))} strategy={verticalListSortingStrategy}>
-        {deals.length > 0 ? (
-          deals.map((deal) => (
-            <CrmCard key={deal.id} deal={deal} draggable={Boolean(onDealMove)} />
-          ))
-        ) : (
-          <div
-            className={`flex min-h-40 h-full flex-col items-center justify-center rounded-[6px] px-3 py-6 text-center ${
-              isDropping ? 'border border-dashed border-[#b76c4f] bg-white/80' : 'border border-dashed'
-            }`}
-            style={{ borderColor: isDropping ? undefined : 'var(--ew-line)' }}
-          >
-            <p className={`text-xs font-medium tracking-wide uppercase ${isDropping ? 'text-[#b76c4f]' : 'text-[var(--ew-muted)]'}`}>
-              {isDropping ? 'Release to place deal' : isActiveTarget ? 'Drop deal here' : 'No deals in this stage'}
-            </p>
-            {!isActiveTarget && !isDropping && (
-              <p className="mt-1 max-w-[18ch] text-[11px] leading-5 text-[var(--ew-muted)]">
-                Empty columns accept drops.
-              </p>
-            )}
-            {isDropping && (
-              <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#cc785c] px-2.5 py-1 text-[11px] font-semibold text-white">
-                <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                Ready to drop
-              </span>
-            )}
-          </div>
-        )}
-      </SortableContext>
+      {deals.length > 0 ? (
+        deals.map((deal) => (
+          <CrmCard key={deal.id} deal={deal} draggable={Boolean(onDealMove)} />
+        ))
+      ) : (
+        <div
+          className="flex h-full min-h-40 flex-col items-center justify-center rounded-[6px] border border-dashed px-3 py-6 text-center"
+          style={{ borderColor: 'var(--ew-line)' }}
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--ew-muted)]">No deals in this stage</p>
+          <p className="mt-1 max-w-[18ch] text-[11px] leading-5 text-[var(--ew-muted)]">Empty columns accept drops.</p>
+        </div>
+      )}
     </div>
+  )
+}
+
+function StageColumn({ stage, index, deals, onDealMove }) {
+  const { setNodeRef } = useDroppable({ id: stageDndId(stage.id), disabled: !onDealMove })
+
+  return (
+    <section
+      ref={setNodeRef}
+      data-board-column
+      className="group flex h-full w-[min(20rem,82vw)] shrink-0 flex-col bg-transparent last:border-r-0"
+      aria-label={`${stage.name} column`}
+    >
+      <header className="shrink-0 rounded-[10px] border border-[rgba(255,255,255,0.95)] bg-white px-3.5 py-3" style={{ boxShadow: '8px 10px 22px rgba(221,194,178,0.42), -6px -6px 16px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.95), inset -2px -2px 4px rgba(247,232,224,0.85)' }}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[11px] font-semibold tracking-[0.06em] text-[var(--ew-muted)]" style={{ borderRadius: '999px', background: '#f7e8e0', border: '1px solid rgba(255,255,255,0.95)', boxShadow: '3px 3px 8px rgba(221,194,178,0.45), -2px -2px 6px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.9)' }}>
+              {String(index + 1).padStart(2, '0')}
+            </span>
+            <h2 className="truncate text-sm font-semibold tracking-[-0.01em] text-[var(--ew-ink)]">{stage.name}</h2>
+          </div>
+          <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[#f7e8e0] px-2 text-xs font-semibold tabular-nums text-[var(--ew-ink)]" style={{ border: '1px solid rgba(255,255,255,0.95)', boxShadow: '3px 3px 8px rgba(221,194,178,0.42), -2px -2px 6px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.9)' }} aria-label={`${deals.length} deals`}>
+            {deals.length}
+          </span>
+        </div>
+        <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full" style={{ background: '#eadfd7', boxShadow: 'inset 2px 2px 4px rgba(27,26,24,0.08), inset -2px -2px 4px rgba(255,255,255,0.9)' }}>
+          <div
+            className="h-full bg-[#cc785c]"
+            style={{ width: `${Math.min(100, Math.max(8, deals.length * 18))}%` }}
+            aria-hidden="true"
+          />
+        </div>
+      </header>
+      <div className="mt-4 flex min-h-0 flex-1 flex-col">
+        <StageDeals deals={deals} onDealMove={onDealMove} />
+      </div>
+    </section>
   )
 }
 
@@ -77,11 +132,49 @@ export default function KanbanBoard({
   onDealMove,
   onCreatePipeline,
 }) {
-  const [activeDealId, setActiveDealId] = useState(null)
+  const [activeDeal, setActiveDeal] = useState(null)
+  const [overStageId, setOverStageId] = useState(null)
+
+  // Pointer over a column wins. In the gap between two columns, keep the
+  // current target instead of re-deciding by overlap, which flickered.
+  const lastOverRef = useRef(null)
+  const stageCollision = useCallback((args) => {
+    if (!args.pointerCoordinates) return rectIntersection(args) // keyboard drag
+    const hits = pointerWithin(args)
+    if (hits.length > 0) {
+      lastOverRef.current = hits[0].id
+      return hits
+    }
+    const last = lastOverRef.current
+    if (last !== null && args.droppableContainers.some((container) => container.id === last)) {
+      return [{ id: last }]
+    }
+    return rectIntersection(args)
+  }, [])
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: columnKeyboardCoordinates }),
   )
+
+  const accessibility = useMemo(() => {
+    const stageName = (over) =>
+      stages.find((stage) => stageDndId(stage.id) === String(over?.id))?.name ?? 'a stage'
+    const dealName = (active) => active?.data.current?.deal?.client?.name ?? 'deal'
+    return {
+      screenReaderInstructions: {
+        draggable:
+          'To move a deal, press Space or Enter. Use the left and right arrow keys to choose a stage, then press Space or Enter to drop it, or Escape to cancel.',
+      },
+      announcements: {
+        onDragStart: ({ active }) => `Picked up ${dealName(active)}.`,
+        onDragOver: ({ active, over }) =>
+          over ? `${dealName(active)} is over ${stageName(over)}.` : `${dealName(active)} is not over a stage.`,
+        onDragEnd: ({ active, over }) =>
+          over ? `${dealName(active)} dropped in ${stageName(over)}.` : `${dealName(active)} returned to its stage.`,
+        onDragCancel: ({ active }) => `Moving ${dealName(active)} was cancelled.`,
+      },
+    }
+  }, [stages])
 
   if (!hasPipeline) {
     return (
@@ -128,27 +221,37 @@ export default function KanbanBoard({
     )
   }
 
+  const resetDrag = () => {
+    lastOverRef.current = null
+    setActiveDeal(null)
+    setOverStageId(null)
+  }
+
+  // Animate the card back only when it returns to its own column; a card
+  // dropped in another column appears there immediately (optimistic move).
+  const movesToOtherStage =
+    activeDeal && overStageId !== null && overStageId !== stageDndId(activeDeal.stageId)
+  const dropAnimation = prefersReducedMotion() || movesToOtherStage ? null : DROP_ANIMATION
+
   const handleDragEnd = ({ active, over }) => {
-    setActiveDealId(null)
-    if (!over || !onDealMove) return
-    const dealId = String(active.id).replace(/^deal-/, '')
-    const targetId = String(over.id)
-    const targetStageId = targetId.startsWith('stage-')
-      ? targetId.slice('stage-'.length)
-      : deals.find((deal) => dealDndId(deal.id) === targetId)?.stageId
-    const sourceDeal = deals.find((deal) => String(deal.id) === dealId)
-    const targetStage = stages.find((stage) => String(stage.id) === String(targetStageId))
-    if (sourceDeal && targetStage && String(sourceDeal.stageId) !== String(targetStage.id)) {
-      onDealMove(sourceDeal.id, targetStage.id)
-    }
+    resetDrag()
+    const deal = active.data.current?.deal
+    if (!over || !onDealMove || !deal) return
+    // Only stage columns are droppable, so `over` is always a column.
+    const targetStage = stages.find((stage) => stageDndId(stage.id) === String(over.id))
+    if (targetStage && targetStage.id !== deal.stageId) onDealMove(deal.id, targetStage.id)
   }
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={({ active }) => setActiveDealId(String(active.id))}
-      onDragCancel={() => setActiveDealId(null)}
+      collisionDetection={stageCollision}
+      accessibility={accessibility}
+      onDragStart={({ active }) => {
+        setActiveDeal(active.data.current?.deal ?? null)
+      }}
+      onDragOver={({ over }) => setOverStageId(over ? String(over.id) : null)}
+      onDragCancel={resetDrag}
       onDragEnd={handleDragEnd}
     >
       <div
@@ -164,39 +267,23 @@ export default function KanbanBoard({
           {stages.map((stage, index) => {
             const stageDeals = deals.filter((deal) => String(deal.stageId) === String(stage.id))
             return (
-              <section
+              <StageColumn
                 key={stage.id}
-                className="group flex h-full w-[min(20rem,82vw)] shrink-0 flex-col bg-transparent last:border-r-0"
-                aria-label={`${stage.name} column`}
-              >
-                <header className="shrink-0 rounded-[10px] border border-[rgba(255,255,255,0.95)] bg-white px-3.5 py-3" style={{ boxShadow: '8px 10px 22px rgba(221,194,178,0.42), -6px -6px 16px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.95), inset -2px -2px 4px rgba(247,232,224,0.85)' }}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[11px] font-semibold tracking-[0.06em] text-[var(--ew-muted)]" style={{ borderRadius: '999px', background: '#f7e8e0', border: '1px solid rgba(255,255,255,0.95)', boxShadow: '3px 3px 8px rgba(221,194,178,0.45), -2px -2px 6px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.9)' }}>
-                        {String(index + 1).padStart(2, '0')}
-                      </span>
-                      <h2 className="truncate text-sm font-semibold tracking-[-0.01em] text-[var(--ew-ink)]">{stage.name}</h2>
-                    </div>
-                    <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[#f7e8e0] px-2 text-xs font-semibold tabular-nums text-[var(--ew-ink)]" style={{ border: '1px solid rgba(255,255,255,0.95)', boxShadow: '3px 3px 8px rgba(221,194,178,0.42), -2px -2px 6px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.9)' }} aria-label={`${stageDeals.length} deals`}>
-                      {stageDeals.length}
-                    </span>
-                  </div>
-                  <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full" style={{ background: '#eadfd7', boxShadow: 'inset 2px 2px 4px rgba(27,26,24,0.08), inset -2px -2px 4px rgba(255,255,255,0.9)' }}>
-                    <div
-                      className="h-full bg-[#cc785c]"
-                      style={{ width: `${Math.min(100, Math.max(8, stageDeals.length * 18))}%` }}
-                      aria-hidden="true"
-                    />
-                  </div>
-                </header>
-                <div className="mt-4 flex min-h-0 flex-1 flex-col">
-                  <StageDeals stage={stage} deals={stageDeals} onDealMove={onDealMove} activeDealId={activeDealId} />
-                </div>
-              </section>
+                stage={stage}
+                index={index}
+                deals={stageDeals}
+                onDealMove={onDealMove}
+              />
             )
           })}
         </div>
       </div>
+      {createPortal(
+        <DragOverlay dropAnimation={dropAnimation} zIndex={80}>
+          {activeDeal ? <DealCardOverlay deal={activeDeal} /> : null}
+        </DragOverlay>,
+        document.body,
+      )}
     </DndContext>
   )
 }

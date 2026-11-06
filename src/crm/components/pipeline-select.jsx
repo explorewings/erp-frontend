@@ -1,10 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { LuCheck, LuChevronDown } from 'react-icons/lu'
-
-const stageLabel = (pipeline) => {
-  const count = Array.isArray(pipeline.stages) ? pipeline.stages.length : null
-  return count === null ? '' : `${count} stage${count === 1 ? '' : 's'}`
-}
+import { plural } from '../utils.js'
 
 /**
  * Pipeline picker for the CRM toolbar.
@@ -161,7 +157,7 @@ export default function PipelineSelect({ pipelines = [], value, onChange, disabl
                 >
                   {pipeline.name}
                 </span>
-                <span className="shrink-0 text-xs text-[var(--ew-muted)]">{stageLabel(pipeline)}</span>
+                <span className="shrink-0 text-xs text-[var(--ew-muted)]">{plural(pipeline.stages?.length ?? 0, 'stage')}</span>
               </li>
             )
           })}
