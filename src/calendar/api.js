@@ -43,10 +43,22 @@ export function normalizeEvent(row) {
   }
 }
 
-export async function fetchCalendarEvents(token, { from, to }) {
+/** Without `page` the server returns the whole range (month grid); with it, one page plus `hasMore` (day panel). */
+export async function fetchCalendarEvents(token, { from, to, page, pageSize }) {
   const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })
+  if (page) params.set('page', String(page))
+  if (pageSize) params.set('pageSize', String(pageSize))
   const data = await request(token, `/calendar?${params}`, {}, 'Unable to load the calendar.')
-  return { events: (data?.events ?? []).map(normalizeEvent), truncated: Boolean(data?.truncated) }
+  return {
+    events: (data?.events ?? []).map(normalizeEvent),
+    truncated: Boolean(data?.truncated),
+    hasMore: Boolean(data?.hasMore),
+  }
+}
+
+export async function fetchCalendarEvent(token, id) {
+  const row = await request(token, `/calendar/${id}`, {}, 'Unable to load the event.')
+  return normalizeEvent(row)
 }
 
 export async function createCalendarEvent(token, payload) {

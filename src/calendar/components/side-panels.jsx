@@ -1,3 +1,4 @@
+import Loader from '../../appcomponents/loader.jsx'
 import { definitionFor } from '../events/events.jsx'
 import { formatDayLong } from '../lib/dates.js'
 import { EVENT_TYPES } from '../lib/event-meta.js'
@@ -78,23 +79,61 @@ function EventCard({ event, viewerId, onOpen }) {
 }
 
 /** Everything on the selected day, as a kanban-style column that fills its height. */
-export function SchedulePanel({ day, events, viewerId, loading, onOpenEvent }) {
+export function SchedulePanel({ day, events, viewerId, loading, error, onRetry, hasMore, loadingMore, onLoadMore, onOpenEvent }) {
   return (
     <section className="flex h-full min-h-0 flex-col" aria-label={`Schedule for ${formatDayLong(day)}`}>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto border p-2.5" style={lane}>
         {events.length ? (
-          events.map((event) => <EventCard key={event.id} event={event} viewerId={viewerId} onOpen={onOpenEvent} />)
+          <>
+            {events.map((event) => (
+              <EventCard key={event.id} event={event} viewerId={viewerId} onOpen={onOpenEvent} />
+            ))}
+            {error ? (
+              <p className="px-1 pt-1 text-center text-[11px] text-danger-strong" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {hasMore ? (
+              <button
+                type="button"
+                onClick={onLoadMore}
+                disabled={loadingMore}
+                className="flex h-9 w-full items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#d9d2c9] bg-white/70 text-xs font-medium text-[var(--ew-ink)] transition-colors hover:border-[#dfae95] hover:bg-[#fff8f3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ew-accent)]/45 disabled:cursor-wait"
+              >
+                {loadingMore ? <Loader size={1.1} /> : 'Load more'}
+              </button>
+            ) : null}
+          </>
         ) : (
           <div
             className="flex h-full min-h-40 flex-col items-center justify-center rounded-[6px] border border-dashed px-3 py-6 text-center"
             style={{ borderColor: 'var(--ew-line)' }}
           >
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--ew-muted)]">
-              {loading ? 'Loading…' : 'Nothing scheduled'}
-            </p>
-            {!loading ? (
-              <p className="mt-1 max-w-[22ch] text-[11px] leading-5 text-[var(--ew-muted)]">Pick another date or add an event.</p>
-            ) : null}
+            {error ? (
+              <>
+                <p className="text-xs font-medium text-danger-strong" role="alert">
+                  {error}
+                </p>
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="mt-2 text-[11px] font-medium text-[var(--ew-ink)] underline underline-offset-4 hover:text-accent-strong"
+                >
+                  Try again
+                </button>
+              </>
+            ) : (
+              loading ? (
+                <div role="status" aria-label="Loading the schedule">
+                  <Loader size={2.2} />
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--ew-muted)]">Nothing scheduled</p>
+                  <p className="mt-1 max-w-[22ch] text-[11px] leading-5 text-[var(--ew-muted)]">Pick another date or add an event.</p>
+                </>
+              )
+            )}
           </div>
         )}
       </div>

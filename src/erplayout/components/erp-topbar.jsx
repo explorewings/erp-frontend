@@ -2,6 +2,7 @@ import { useLocation } from 'react-router-dom'
 import { getSectionLabel } from '../nav.js'
 import { MenuIcon } from '../../components/icons.jsx'
 import UserMenu from './user-menu.jsx'
+import NotificationBell from '../../notifications/components/notification-bell.jsx'
 
 export default function ErpTopbar({ onMenu }) {
   const { pathname } = useLocation()
@@ -22,7 +23,8 @@ export default function ErpTopbar({ onMenu }) {
         {section}
       </p>
 
-      <div className="order-1 lg:order-none">
+      <div className="order-1 flex items-center gap-3 lg:order-none">
+        <NotificationBell />
         <UserMenu />
       </div>
     </header>
