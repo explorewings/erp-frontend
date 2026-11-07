@@ -1,24 +1,26 @@
 import { useRef } from 'react'
 import { LuChevronLeft, LuChevronRight } from 'react-icons/lu'
 import { EVENT_TYPES } from '../lib/event-meta.js'
-import { WEEKDAYS, addDays, dayKey, formatDayLong, formatFullDate, isSameDay, monthGrid } from '../lib/dates.js'
+import { WEEKDAYS, addDays, dayKey, formatDate, formatDayLong, formatFullDate, isSameDay, monthGrid } from '../lib/dates.js'
 
 /** Compact date switcher: the selected date (click = today) and month arrows. */
 export function DateSwitcher({ selectedDay, onPrev, onNext, onToday }) {
   const isToday = isSameDay(selectedDay, new Date())
   const arrow =
-    'flex h-9 w-9 items-center justify-center text-muted transition-colors hover:bg-ground hover:text-ink focus-visible:relative focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/25'
+    'flex h-8 w-8 items-center justify-center text-muted transition-colors hover:bg-ground hover:text-ink focus-visible:relative focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:h-9 sm:w-9'
   return (
-    <div className="inline-flex h-9 items-stretch overflow-hidden rounded-xs border border-line bg-surface">
+    <div className="inline-flex h-8 items-stretch overflow-hidden rounded-xs border border-line bg-surface sm:h-9">
       <button
         type="button"
         onClick={onToday}
         title={isToday ? undefined : 'Go to today'}
         aria-label={isToday ? `${formatFullDate(selectedDay)}, today` : `${formatFullDate(selectedDay)}. Go to today`}
-        className="px-3.5 text-body-sm font-medium tabular-nums text-ink transition-colors hover:bg-ground focus-visible:relative focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/25"
+        className="px-2.5 text-label font-medium tabular-nums text-ink transition-colors hover:bg-ground focus-visible:relative focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:px-3.5 sm:text-body-sm"
         aria-live="polite"
       >
-        {formatFullDate(selectedDay)}
+        {/* Shorter label on small screens to leave room for the schedule button. */}
+        <span className="sm:hidden">{formatDate(selectedDay)}</span>
+        <span className="hidden sm:inline">{formatFullDate(selectedDay)}</span>
       </button>
       <button type="button" onClick={onPrev} aria-label="Previous month" className={`${arrow} border-l border-line`}>
         <LuChevronLeft className="h-4 w-4" aria-hidden="true" />

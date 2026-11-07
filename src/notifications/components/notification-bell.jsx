@@ -5,8 +5,10 @@ import { useAuth } from '../../authetication/auth-context.js'
 import { useNotifications } from '../hooks/use-notifications.js'
 import NotificationDrawer from './notification-drawer.jsx'
 
-/** Header bell with an unread badge; opens the notifications drawer. Mounted once in the topbar. */
-export default function NotificationBell() {
+/** Header bell with an unread badge; opens the notifications drawer. Mounted once in the topbar.
+ *  On mobile (<lg) it renders as a bare icon button like the menu button; from lg up it is the
+ *  orange circle. `className` positions it in the topbar flex flow. */
+export default function NotificationBell({ className = '' }) {
   const { token } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -23,9 +25,11 @@ export default function NotificationBell() {
         title="Notifications"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={`relative flex h-9 w-9 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 ${
-          open ? 'border-[#cc785c] bg-[#fff5ef] text-accent-strong' : 'border-line bg-surface text-muted hover:bg-ground hover:text-ink'
-        }`}
+        className={`relative flex h-9 w-9 items-center justify-center rounded-control transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 lg:rounded-full lg:border lg:border-[#cc785c] ${
+          open
+            ? 'bg-ground text-ink lg:bg-[#fff5ef] lg:text-accent-strong'
+            : 'text-muted hover:bg-ground hover:text-ink lg:bg-surface lg:text-[#cc785c]'
+        } ${className}`}
       >
         <LuBell className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden="true" />
         {unread ? (

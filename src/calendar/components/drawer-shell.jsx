@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuX } from 'react-icons/lu'
+import { isTopDrawer, registerDrawer, useCloseOnBack } from '../../components/drawer-back.js'
 
 const ease = 'cubic-bezier(0.16, 1, 0.3, 1)'
 
@@ -8,12 +9,14 @@ const ease = 'cubic-bezier(0.16, 1, 0.3, 1)'
  * Right-side drawer frame for the calendar: sits below the topbar, dims the page,
  * slides in, closes on Escape/scrim (unless busy), and returns focus on close.
  * `children` fill the body; pass a <form> when the drawer submits.
+ * `actions` renders extra buttons in the header, just left of the close button.
  */
-export default function DrawerShell({ labelledBy, header, closeLabel = 'Close', busy = false, onClose, children }) {
+export default function DrawerShell({ labelledBy, header, actions, closeLabel = 'Close', busy = false, closeOnBack = false, onClose, children }) {
   const [visible, setVisible] = useState(false)
   const closeRef = useRef(null)
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  const idRef = useRef(null)
+  if (idRef.current === null) idRef.current = Symbol('drawer')
+  const { close: backClose } = useCloseOnBack(closeOnBack, onClose)
 
   useEffect(() => {
     const returnTo = document.activeElement
@@ -27,20 +30,28 @@ export default function DrawerShell({ labelledBy, header, closeLabel = 'Close', 
     }
   }, [])
 
+  useEffect(() => registerDrawer(idRef.current), [])
+
   useEffect(() => {
     const onKey = (event) => {
-      if (event.key === 'Escape' && !busy) onCloseRef.current()
+      if (event.key === 'Escape' && !busy && isTopDrawer(idRef.current)) handleClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [busy])
+
+  const handleClose = () => {
+    if (busy) return
+    if (closeOnBack) backClose()
+    else onClose()
+  }
 
   return createPortal(
     <>
       <div
         className={`fixed inset-x-0 bottom-0 top-16 z-40 bg-ink/20 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
         aria-hidden="true"
-        onMouseDown={() => !busy && onClose()}
+        onMouseDown={() => !busy && handleClose()}
       />
       <div
         className={`fixed bottom-0 right-0 top-16 z-50 w-full transition-transform duration-300 motion-reduce:transition-none sm:w-[30rem] ${
@@ -55,17 +66,20 @@ export default function DrawerShell({ labelledBy, header, closeLabel = 'Close', 
           className="flex h-full w-full flex-col border-l border-line bg-[#f8f7f5] shadow-panel"
         >
           <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-5">
-            <div className="min-w-0">{header}</div>
-            <button
-              ref={closeRef}
-              type="button"
-              onClick={onClose}
-              disabled={busy}
-              aria-label={closeLabel}
+            <div className="min-w-0 flex-1">{header}</div>
+            <div className="flex shrink-0 items-center gap-2">
+              {actions}
+              <button
+                ref={closeRef}
+                type="button"
+                onClick={handleClose}
+                disabled={busy}
+                aria-label={closeLabel}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xs border border-line text-muted transition-colors hover:bg-ground hover:text-ink focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 disabled:opacity-50"
-            >
-              <LuX className="h-4 w-4" aria-hidden="true" />
-            </button>
+              >
+                <LuX className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           </header>
           {children}
         </aside>

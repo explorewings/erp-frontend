@@ -39,6 +39,7 @@ export default function AddEventDrawer({ type, day, token, viewer, users, assign
       header={<TypeLabel type={type} />}
       closeLabel={`Close ${definition.createTitle.toLowerCase()}`}
       busy={busy}
+      closeOnBack
       onClose={onClose}
     >
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit} aria-busy={busy} noValidate>

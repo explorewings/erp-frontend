@@ -10,6 +10,7 @@ export default function ErpTopbar({ onMenu }) {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-surface px-4 sm:px-6">
+      <NotificationBell className="order-3 lg:order-2" />
       <button
         type="button"
         onClick={onMenu}
@@ -23,8 +24,7 @@ export default function ErpTopbar({ onMenu }) {
         {section}
       </p>
 
-      <div className="order-1 flex items-center gap-3 lg:order-none">
-        <NotificationBell />
+      <div className="order-1 flex items-center gap-3 lg:order-3">
         <UserMenu />
       </div>
     </header>

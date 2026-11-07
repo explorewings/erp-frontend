@@ -5,11 +5,12 @@ import Toast from '../../appcomponents/toast.jsx'
 import { useAuth } from '../../authetication/auth-context.js'
 import AddEventDrawer from '../components/add-event-drawer.jsx'
 import CalendarGrid, { DateSwitcher } from '../components/calendar-grid.jsx'
+import DrawerShell from '../components/drawer-shell.jsx'
 import EventDrawer from '../components/event-drawer.jsx'
 import NewEventMenu from '../components/new-event-menu.jsx'
 import { SchedulePanel } from '../components/side-panels.jsx'
 import { groupByDay, useCalendarEvents, useCalendarUsers, useDayEvents } from '../hooks/use-calendar.js'
-import { dayKey, formatFullDate, shiftMonthKeepDay, startOfDay } from '../lib/dates.js'
+import { dayKey, formatDate, formatFullDate, shiftMonthKeepDay, startOfDay } from '../lib/dates.js'
 import { assignableUsers, creatableTypes } from '../lib/policy.js'
 import { fetchCalendarEvent } from '../api.js'
 
@@ -22,6 +23,8 @@ export default function Calendar() {
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()))
   const [openEventId, setOpenEventId] = useState(null)
   const [addType, setAddType] = useState(null)
+  // Mobile: the schedule column lives in a right-side drawer instead of below the grid.
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [toast, setToast] = useState(null)
   // An event opened from a link (?event=12, e.g. a notification) until the day's list includes it.
   const [linkedEvent, setLinkedEvent] = useState(null)
@@ -68,7 +71,12 @@ export default function Calendar() {
     dayData.reload({ quiet: true })
   }
 
-  const selectDay = useCallback((day) => setSelectedDay(startOfDay(day)), [])
+  // Picking a day shows its events: on mobile that means opening the Events drawer
+  // (the panel is not on screen there); desktop just updates the schedule column.
+  const selectDay = useCallback((day) => {
+    setSelectedDay(startOfDay(day))
+    if (window.matchMedia('(max-width: 1023px)').matches) setScheduleOpen(true)
+  }, [])
   // Deep link: jump to the event's day and open it, then drop the param so a refresh does not reopen it.
   useEffect(() => {
     if (!linkedId || !token) return undefined
@@ -96,13 +104,31 @@ export default function Calendar() {
   const loading = status === 'loading'
   const dayLoading = dayData.status === 'loading'
 
+  // The schedule lane, shared by the desktop column and the mobile drawer.
+  const schedulePanel = (className = '') => (
+    <div className={`min-h-0 flex-1 ${className}`}>
+      <SchedulePanel
+        day={selectedDay}
+        events={dayData.events}
+        viewerId={user?.id}
+        loading={dayLoading}
+        error={dayData.error}
+        onRetry={() => dayData.reload()}
+        hasMore={dayData.hasMore}
+        loadingMore={dayData.loadingMore}
+        onLoadMore={dayData.loadMore}
+        onOpenEvent={setOpenEventId}
+      />
+    </div>
+  )
+
   return (
     <div className="grid grid-cols-1 gap-x-8 gap-y-5 lg:grid-cols-[minmax(17rem,23rem)_minmax(0,1fr)]">
-      {/* Schedule */}
-      <section className="order-2 flex min-w-0 flex-col gap-4 lg:order-1" aria-labelledby="calendar-schedule-title">
+      {/* Schedule: its own column on desktop, a right-side drawer on mobile. */}
+      <section className="order-2 hidden min-w-0 flex-col gap-4 lg:order-1 lg:flex" aria-labelledby="calendar-schedule-title-desktop">
         <header className="flex min-h-9 items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 id="calendar-schedule-title" className="text-title font-semibold leading-tight tracking-[-0.01em] text-ink">
+            <h1 id="calendar-schedule-title-desktop" className="text-title font-semibold leading-tight tracking-[-0.01em] text-ink">
               Schedule
             </h1>
             <p className="mt-0.5 text-meta text-muted">{formatFullDate(selectedDay)}</p>
@@ -120,31 +146,30 @@ export default function Calendar() {
             <NewEventMenu creatable={creatable} onPick={setAddType} />
           </div>
         </header>
-        <div className="min-h-0 lg:h-[70vh]">
-          <SchedulePanel
-            day={selectedDay}
-            events={dayData.events}
-            viewerId={user?.id}
-            loading={dayLoading}
-            error={dayData.error}
-            onRetry={() => dayData.reload()}
-            hasMore={dayData.hasMore}
-            loadingMore={dayData.loadingMore}
-            onLoadMore={dayData.loadMore}
-            onOpenEvent={setOpenEventId}
-          />
-        </div>
+        {schedulePanel('lg:h-[70vh] lg:flex-none')}
       </section>
 
       {/* Month */}
       <section className="order-1 flex min-w-0 flex-col gap-4 lg:order-2" aria-label="Month">
-        <header className="flex min-h-9 items-start justify-end">
+        <header className="flex min-h-9 items-start justify-between gap-3 lg:justify-end">
           <DateSwitcher
             selectedDay={selectedDay}
             onPrev={() => setSelectedDay((day) => shiftMonthKeepDay(day, -1))}
             onNext={() => setSelectedDay((day) => shiftMonthKeepDay(day, 1))}
             onToday={() => setSelectedDay(startOfDay(new Date()))}
           />
+          <div className="flex shrink-0 items-center gap-2 lg:hidden">
+            <NewEventMenu creatable={creatable} onPick={setAddType} iconOnly />
+            <button
+              type="button"
+              onClick={() => setScheduleOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={scheduleOpen}
+              className="inline-flex h-8 shrink-0 items-center justify-center rounded-xs border border-[#cc785c]/45 bg-accent-soft px-2.5 text-label font-medium text-accent-strong transition-colors hover:border-[#cc785c] hover:bg-[#ffeee4] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:h-9 sm:px-3 sm:text-body-sm lg:hidden"
+            >
+              Events
+            </button>
+          </div>
         </header>
         {status === 'error' ? (
           <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-danger/25 bg-danger-soft px-4 py-2.5">
@@ -158,6 +183,36 @@ export default function Calendar() {
           <CalendarGrid month={month} selectedDay={selectedDay} eventsByDay={eventsByDay} loading={loading} onSelectDay={selectDay} />
         </div>
       </section>
+
+      {scheduleOpen ? (
+        <DrawerShell
+          labelledBy="calendar-events-title-mobile"
+          closeLabel="Close schedule"
+          closeOnBack
+          header={
+            <div className="min-w-0">
+              <h1 id="calendar-events-title-mobile" className="truncate text-body-sm font-semibold leading-tight text-ink">
+                Events
+              </h1>
+              <p className="mt-0.5 truncate text-micro leading-tight text-muted">{formatFullDate(selectedDay)}</p>
+            </div>
+          }
+          actions={
+            <button
+              type="button"
+              onClick={refreshAll}
+              aria-label="Refresh"
+              title="Refresh"
+              className="flex h-8 w-8 items-center justify-center rounded-xs border border-line text-muted transition-colors hover:bg-ground hover:text-ink focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20"
+            >
+              <LuRefreshCw className={`h-4 w-4 ${loading || dayLoading ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true" />
+            </button>
+          }
+          onClose={() => setScheduleOpen(false)}
+        >
+          <div className="flex min-h-0 flex-1 flex-col p-4">{schedulePanel()}</div>
+        </DrawerShell>
+      ) : null}
 
       {addType ? (
         <AddEventDrawer

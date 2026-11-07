@@ -178,7 +178,7 @@ export default function EventDrawer({ event, viewer, token, users, assignees, on
   const firstPrimary = actions.findIndex((item) => item.tone === 'primary')
 
   return (
-    <DrawerShell labelledBy="calendar-event-title" header={<TypeLabel type={event.type} />} closeLabel="Close details" busy={busy} onClose={onClose}>
+    <DrawerShell labelledBy="calendar-event-title" header={<TypeLabel type={event.type} />} closeLabel="Close details" busy={busy} closeOnBack onClose={onClose}>
       {mode === 'edit' ? (
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={saveEdit} aria-busy={busy} noValidate>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">

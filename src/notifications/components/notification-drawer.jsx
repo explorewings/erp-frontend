@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuBell, LuBellOff, LuCalendarClock, LuCheckCheck, LuListTodo, LuMegaphone, LuTriangleAlert, LuX } from 'react-icons/lu'
 import Loader from '../../appcomponents/loader.jsx'
+import { isTopDrawer, registerDrawer, useCloseOnBack } from '../../components/drawer-back.js'
 
 const ease = 'cubic-bezier(0.16, 1, 0.3, 1)'
 const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
@@ -36,10 +37,10 @@ function NotificationItem({ item, onOpen }) {
       <button
         type="button"
         onClick={() => onOpen(item)}
-        className={`relative flex w-full items-start gap-3 rounded-[10px] border px-3 py-2.5 text-left transition-[background-color,border-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ew-accent)]/45 ${
+        className={`relative flex w-full items-start gap-3 rounded-[10px] border px-3 py-2.5 text-left shadow-[0_1px_2px_rgba(27,26,24,0.08),0_4px_10px_-6px_rgba(27,26,24,0.2)] outline-none transition-[background-color,border-color,box-shadow] duration-150 ease-out hover:border-[#dfae95] hover:bg-[#fff8f3] hover:shadow-[0_1px_2px_rgba(27,26,24,0.08),0_8px_18px_-8px_rgba(183,108,79,0.32)] focus-visible:border-[var(--ew-accent-strong)] focus-visible:ring-2 focus-visible:ring-[var(--ew-accent)]/45 ${
           unread
-            ? 'border-[#ecd6c9] bg-white shadow-[0_1px_2px_rgba(27,26,24,0.06)] hover:border-[#dfae95] hover:bg-[#fff8f3]'
-            : 'border-transparent bg-transparent hover:border-line hover:bg-white/70'
+            ? 'border-[#ecd6c9] bg-[#fff8f3]'
+            : 'border-[#d9d2c9] bg-[var(--ew-surface)]'
         }`}
       >
         <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] ${tone}`}>
@@ -67,9 +68,14 @@ function NotificationItem({ item, onOpen }) {
 export default function NotificationDrawer({ data, onClose, onNavigate }) {
   const [visible, setVisible] = useState(false)
   const closeRef = useRef(null)
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  const idRef = useRef(null)
+  if (idRef.current === null) idRef.current = Symbol('drawer')
+  // Back button and Escape close the drawer; release() leaves the history marker
+  // alone when following a notification link (the navigation must not be undone).
+  const { close, release } = useCloseOnBack(true, onClose)
   const { items, status, error, hasMore, loadingMore, unread, loadFirst, loadMore, markRead } = data
+
+  useEffect(() => registerDrawer(idRef.current), [])
 
   useEffect(() => {
     loadFirst()
@@ -79,7 +85,7 @@ export default function NotificationDrawer({ data, onClose, onNavigate }) {
       closeRef.current?.focus()
     })
     const onKey = (event) => {
-      if (event.key === 'Escape') onCloseRef.current()
+      if (event.key === 'Escape' && isTopDrawer(idRef.current)) close()
     }
     document.addEventListener('keydown', onKey)
     return () => {
@@ -87,12 +93,12 @@ export default function NotificationDrawer({ data, onClose, onNavigate }) {
       document.removeEventListener('keydown', onKey)
       returnTo?.focus?.()
     }
-  }, [loadFirst])
+  }, [loadFirst, close])
 
   const open = (item) => {
     if (!item.readAt) markRead([item.id])
+    release()
     if (item.link) onNavigate(item.link)
-    onClose()
   }
 
   return createPortal(
@@ -100,7 +106,7 @@ export default function NotificationDrawer({ data, onClose, onNavigate }) {
       <div
         className={`fixed inset-x-0 bottom-0 top-16 z-40 bg-ink/20 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
         aria-hidden="true"
-        onMouseDown={onClose}
+        onMouseDown={close}
       />
       <div
         className={`fixed bottom-0 right-0 top-16 z-50 w-full transition-transform duration-300 motion-reduce:transition-none sm:w-[26rem] ${
@@ -133,13 +139,13 @@ export default function NotificationDrawer({ data, onClose, onNavigate }) {
                   className="inline-flex h-8 items-center gap-1.5 rounded-xs border border-line px-2.5 text-xs font-medium text-ink transition-colors hover:bg-ground focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20"
                 >
                   <LuCheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                  Mark all read
+                  Mark read
                 </button>
               ) : null}
               <button
                 ref={closeRef}
                 type="button"
-                onClick={onClose}
+                onClick={close}
                 aria-label="Close notifications"
                 className="flex h-8 w-8 items-center justify-center rounded-xs border border-line text-muted transition-colors hover:bg-ground hover:text-ink focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20"
               >

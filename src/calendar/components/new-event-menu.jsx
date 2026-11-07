@@ -8,8 +8,9 @@ const NOTES = {
   followup: 'Available once CRM follow-ups are set up',
 }
 
-/** "Add event" button with a menu of the event types the viewer may create. */
-export default function NewEventMenu({ creatable, onPick }) {
+/** "Add event" button with a menu of the event types the viewer may create.
+ *  `iconOnly` renders a compact square "+" button (mobile header) with a right-aligned menu. */
+export default function NewEventMenu({ creatable, onPick, iconOnly = false }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const firstItem = useRef(null)
@@ -38,13 +39,18 @@ export default function NewEventMenu({ creatable, onPick }) {
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex h-9 items-center gap-1.5 rounded-xs border border-[#cc785c]/45 bg-accent-soft px-3 text-body-sm font-medium text-accent-strong transition-colors hover:border-[#cc785c] hover:bg-[#ffeee4] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/25"
+        aria-label={iconOnly ? 'Add event' : undefined}
+        className={
+          iconOnly
+            ? 'inline-flex h-8 w-8 items-center justify-center rounded-xs border border-[#cc785c]/45 bg-accent-soft text-accent-strong transition-colors hover:border-[#cc785c] hover:bg-[#ffeee4] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:h-9 sm:w-9'
+            : 'inline-flex h-9 items-center gap-1.5 rounded-xs border border-[#cc785c]/45 bg-accent-soft px-3 text-body-sm font-medium text-accent-strong transition-colors hover:border-[#cc785c] hover:bg-[#ffeee4] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/25'
+        }
       >
         <LuPlus className="h-4 w-4" aria-hidden="true" />
-        Add event
+        {iconOnly ? null : 'Add event'}
       </button>
       {open ? (
-        <div role="menu" className="absolute left-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-control border border-line bg-surface py-1 shadow-panel">
+        <div role="menu" className={`absolute top-full z-30 mt-2 w-64 overflow-hidden rounded-control border border-line bg-surface py-1 shadow-panel ${iconOnly ? 'right-0' : 'left-0'}`}>
           {ITEMS.map((type, index) => {
             const allowed = creatable[type]
             return (

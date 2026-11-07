@@ -1,7 +1,7 @@
 import { API_BASE_URL, getApiErrorMessage } from '../authetication/api.js'
 
 /*
- * Calendar API client for the v2 backend (docs/calendar-plan.md §6).
+ * Calendar API client for the v2 backend (docs/calendar-module.md §6).
  * The server sends `permissions` with every event; the UI renders actions from
  * those alone and never re-implements the transition rules.
  * Errors carry `status`, `code` (VALIDATION, INVALID_TRANSITION, VERSION_CONFLICT…)
