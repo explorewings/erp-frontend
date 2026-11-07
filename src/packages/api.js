@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001/rest/v1'
+import { API_BASE_URL, getApiErrorMessage } from '../authetication/api.js'
 
 function jsonHeaders(token) {
   return {
@@ -7,14 +7,10 @@ function jsonHeaders(token) {
   }
 }
 
-function getErrorMessage(data, fallback) {
-  return (Array.isArray(data?.message) ? data.message[0] : data?.message) || fallback
-}
-
 async function readResponse(response, fallback) {
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error(getErrorMessage(data, fallback))
+    throw new Error(getApiErrorMessage(response, data, fallback))
   }
   return data
 }

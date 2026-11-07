@@ -18,6 +18,7 @@ export default function ErpLayout() {
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const { pathname } = useLocation()
   const isCrmPage = pathname.endsWith('/crm')
+  const isWidePage = pathname.endsWith('/calendar')
   const isFullHeightPage =
     pathname.endsWith('/packages') ||
     pathname.endsWith('/resorts') ||
@@ -55,7 +56,7 @@ export default function ErpLayout() {
             className={
               isFullHeightPage
                 ? 'flex min-h-0 w-full flex-1 flex-col'
-                : 'ew-rise mx-auto w-full max-w-6xl'
+                : `ew-rise mx-auto w-full ${isWidePage ? 'max-w-[110rem]' : 'max-w-6xl'}`
             }
           >
             <Outlet />

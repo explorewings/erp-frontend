@@ -1,5 +1,6 @@
 import { useDraggable } from '@dnd-kit/core'
 import { LuGripVertical, LuMail, LuPhone } from 'react-icons/lu'
+import { MdKeyboardDoubleArrowRight } from 'react-icons/md'
 import { dealDndId } from '../utils.js'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' })
@@ -14,7 +15,7 @@ function formatAdded(value) {
 }
 
 /** Visual body of a deal card, shared by the board card and the drag overlay. */
-function DealCardBody({ deal, showGrip = true }) {
+function DealCardBody({ deal, showGrip = true, onView }) {
   const { client } = deal
   return (
     <>
@@ -53,9 +54,23 @@ function DealCardBody({ deal, showGrip = true }) {
         </dl>
       )}
 
-      <p className="mt-3 border-t border-[var(--ew-line)] pt-2 text-[11px] leading-4 tabular-nums text-[var(--ew-muted)]">
-        {formatAdded(deal.createdAt)}
-      </p>
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--ew-line)] pt-2">
+        <p className="text-[11px] leading-4 tabular-nums text-[var(--ew-muted)]">{formatAdded(deal.createdAt)}</p>
+        {onView ? (
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              onView(deal)
+            }}
+            className="inline-flex items-center gap-1 rounded-[2px] border border-[var(--ew-line)] px-2 py-0.5 text-[11px] font-medium text-[var(--ew-ink)] transition-colors hover:border-[var(--ew-accent)] hover:bg-[#cc785c] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ew-accent)]"
+          >
+            View
+            <MdKeyboardDoubleArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
     </>
   )
 }
@@ -67,7 +82,7 @@ const cardSurface =
  * A deal on the board. While it is being dragged, the card stays in its column
  * as a dashed slot and the moving copy is rendered by <DealCardOverlay>.
  */
-export default function CrmCard({ deal, draggable = false }) {
+export default function CrmCard({ deal, draggable = false, onView }) {
   const client = deal?.client
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: dealDndId(deal?.id),
@@ -103,7 +118,7 @@ export default function CrmCard({ deal, draggable = false }) {
           : ''
       }`}
     >
-      <DealCardBody deal={deal} showGrip={draggable} />
+      <DealCardBody deal={deal} showGrip={draggable} onView={onView} />
     </article>
   )
 }

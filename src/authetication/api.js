@@ -1,6 +1,15 @@
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001/rest/v1'
 
+export function getApiErrorMessage(response, data, fallback) {
+  if (response.status === 401) return 'Session expired. Please log in again.'
+  if (!data) return fallback
+  const { message } = data
+  if (Array.isArray(message)) return message[0] ?? fallback
+  if (typeof message === 'string') return message
+  return fallback
+}
+
 function extractMessage(data, fallback) {
   if (!data) return fallback
   const { message } = data

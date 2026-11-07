@@ -129,6 +129,16 @@
   }
 }
 
+/* Calendar: indeterminate loading bar along the top of the month grid. */
+@keyframes calendar-load {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
 /* CRM: a deal card lifting off the board when a drag starts. */
 @keyframes crm-card-lift {
   from {

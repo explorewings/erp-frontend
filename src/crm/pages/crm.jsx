@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../authetication/auth-context.js'
 import Loader from '../../appcomponents/loader.jsx'
 import AddDeal from '../components/add-deal.jsx'
+import DealDetailsDrawer from '../components/deal-details-drawer.jsx'
 import CrmSearchModal from '../components/crm-search-modal.jsx'
 import InlineError from '../components/inline-error.jsx'
 import KanbanBoard from '../components/kanban-board.jsx'
@@ -132,6 +133,7 @@ export default function Crm() {
   const [pipelineModalTab, setPipelineModalTab] = useState(null)
   const [isStageDrawerOpen, setIsStageDrawerOpen] = useState(false)
   const [isAddDealOpen, setIsAddDealOpen] = useState(false)
+  const [detailsDeal, setDetailsDeal] = useState(null)
   const boardScrollerRef = useRef(null)
 
   // Fall back to the first pipeline when nothing (or a deleted pipeline) is selected.
@@ -300,6 +302,7 @@ export default function Crm() {
                     deals={visibleDeals}
                     hasPipeline={Boolean(selectedPipeline)}
                     onDealMove={dealsError ? undefined : moveDeal}
+                    onViewDeal={setDetailsDeal}
                     onCreatePipeline={() => setPipelineModalTab('create')}
                   />
                 )}
@@ -336,6 +339,13 @@ export default function Crm() {
           pipeline={selectedPipeline}
           onClose={() => setIsAddDealOpen(false)}
           onCreated={addDeal}
+        />
+        <DealDetailsDrawer
+          open={Boolean(detailsDeal)}
+          deal={detailsDeal}
+          pipeline={selectedPipeline}
+          stages={stages}
+          onClose={() => setDetailsDeal(null)}
         />
         <ManageStageDrawer
           open={isStageDrawerOpen && Boolean(selectedPipeline)}

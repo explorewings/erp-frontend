@@ -58,7 +58,7 @@ const columnKeyboardCoordinates = (event, { context }) => {
 }
 
 /** A column's deal list. It looks the same whether or not a drag is in progress. */
-function StageDeals({ deals, onDealMove }) {
+function StageDeals({ deals, onDealMove, onViewDeal }) {
   return (
     <div
       className="min-h-0 flex-1 space-y-2 overflow-y-auto border p-2.5"
@@ -72,7 +72,7 @@ function StageDeals({ deals, onDealMove }) {
     >
       {deals.length > 0 ? (
         deals.map((deal) => (
-          <CrmCard key={deal.id} deal={deal} draggable={Boolean(onDealMove)} />
+          <CrmCard key={deal.id} deal={deal} draggable={Boolean(onDealMove)} onView={onViewDeal} />
         ))
       ) : (
         <div
@@ -87,7 +87,7 @@ function StageDeals({ deals, onDealMove }) {
   )
 }
 
-function StageColumn({ stage, index, deals, onDealMove }) {
+function StageColumn({ stage, index, deals, onDealMove, onViewDeal }) {
   const { setNodeRef } = useDroppable({ id: stageDndId(stage.id), disabled: !onDealMove })
 
   return (
@@ -118,8 +118,8 @@ function StageColumn({ stage, index, deals, onDealMove }) {
         </div>
       </header>
       <div className="mt-4 flex min-h-0 flex-1 flex-col">
-        <StageDeals deals={deals} onDealMove={onDealMove} />
-      </div>
+        <StageDeals deals={deals} onDealMove={onDealMove} onViewDeal={onViewDeal} />
+</div>
     </section>
   )
 }
@@ -130,6 +130,7 @@ export default function KanbanBoard({
   deals = [],
   hasPipeline = false,
   onDealMove,
+  onViewDeal,
   onCreatePipeline,
 }) {
   const [activeDeal, setActiveDeal] = useState(null)
@@ -273,6 +274,7 @@ export default function KanbanBoard({
                 index={index}
                 deals={stageDeals}
                 onDealMove={onDealMove}
+                onViewDeal={onViewDeal}
               />
             )
           })}

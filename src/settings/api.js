@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../authetication/api.js'
+import { API_BASE_URL, getApiErrorMessage } from '../authetication/api.js'
 
 export async function updateUser(token, id, payload) {
   let response
@@ -17,9 +17,7 @@ export async function updateUser(token, id, payload) {
 
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    const message =
-      (Array.isArray(data?.message) ? data.message[0] : data?.message) ??
-      'Unable to update user.'
+    const message = getApiErrorMessage(response, data, 'Unable to update user.')
     throw new Error(message)
   }
   return data
@@ -41,9 +39,7 @@ export async function deleteUser(token, id) {
 
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    const message =
-      (Array.isArray(data?.message) ? data.message[0] : data?.message) ??
-      'Unable to delete user.'
+    const message = getApiErrorMessage(response, data, 'Unable to delete user.')
     throw new Error(message)
   }
   return data
@@ -64,9 +60,7 @@ export async function fetchUsers(token) {
 
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    const message =
-      (Array.isArray(data?.message) ? data.message[0] : data?.message) ??
-      'Unable to load users.'
+    const message = getApiErrorMessage(response, data, 'Unable to load users.')
     throw new Error(message)
   }
   return Array.isArray(data) ? data : (data?.users ?? [])
@@ -89,9 +83,7 @@ export async function createUser(token, payload) {
 
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    const message =
-      (Array.isArray(data?.message) ? data.message[0] : data?.message) ??
-      'Unable to create user.'
+    const message = getApiErrorMessage(response, data, 'Unable to create user.')
     const error = new Error(message)
     error.code = data?.code
     error.field = data?.field
@@ -117,9 +109,11 @@ export async function checkUserAvailability(token, payload) {
 
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    const message =
-      (Array.isArray(data?.message) ? data.message[0] : data?.message) ??
-      'Unable to check username and email availability.'
+    const message = getApiErrorMessage(
+      response,
+      data,
+      'Unable to check username and email availability.',
+    )
     throw new Error(message)
   }
   return data
@@ -139,7 +133,7 @@ export async function fetchAccess(token, userId) {
   })
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error((Array.isArray(data?.message) ? data.message[0] : data?.message) || 'Unable to load access.')
+    throw new Error(getApiErrorMessage(response, data, 'Unable to load access.'))
   }
   return Array.isArray(data) ? data : []
 }
@@ -152,7 +146,7 @@ export async function saveAccess(token, userId, codes) {
   })
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error((Array.isArray(data?.message) ? data.message[0] : data?.message) || 'Unable to save access.')
+    throw new Error(getApiErrorMessage(response, data, 'Unable to save access.'))
   }
   return data
 }
@@ -163,7 +157,7 @@ export async function fetchMenuAccess(token, code) {
   })
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error((Array.isArray(data?.message) ? data.message[0] : data?.message) || 'Unable to load access.')
+    throw new Error(getApiErrorMessage(response, data, 'Unable to load access.'))
   }
   return Array.isArray(data) ? data : []
 }
@@ -176,7 +170,7 @@ export async function saveMenuAccess(token, code, userIds) {
   })
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error((Array.isArray(data?.message) ? data.message[0] : data?.message) || 'Unable to save access.')
+    throw new Error(getApiErrorMessage(response, data, 'Unable to save access.'))
   }
   return data
 }
@@ -188,7 +182,7 @@ export async function fetchAccessItems(token, type) {
   })
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error((Array.isArray(data?.message) ? data.message[0] : data?.message) || 'Unable to load access items.')
+    throw new Error(getApiErrorMessage(response, data, 'Unable to load access items.'))
   }
   return Array.isArray(data) ? data : []
 }
