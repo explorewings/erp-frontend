@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { LuCheck, LuChevronDown, LuChevronRight, LuFilter, LuPlus, LuSearch, LuTrash2 } from 'react-icons/lu'
+import { LuArrowRight, LuCheck, LuChevronDown, LuChevronRight, LuFilter, LuPlus, LuSearch, LuTrash2 } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
 import Alert from '../../appcomponents/alert.jsx'
 import Loader from '../../appcomponents/loader.jsx'
@@ -12,6 +12,7 @@ import ClientDetails from '../components/client-details.jsx'
 import ClientImportsPanel from '../components/client-imports-panel.jsx'
 import ClientImportModal from '../components/client-import-modal.jsx'
 import ClientSearchModal from '../components/client-search-modal.jsx'
+import ClientToPipeline from '../components/client-to-pipeline.jsx'
 import ClientsTable from '../components/clients-table.jsx'
 import {
   deleteClient,
@@ -48,10 +49,12 @@ export default function Clients() {
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false)
   const [isSelectionMenuOpen, setIsSelectionMenuOpen] = useState(false)
+  const [selectionMenuLeft, setSelectionMenuLeft] = useState(0)
   const [isImportSelectorExpanded, setIsImportSelectorExpanded] = useState(false)
   const [selectedClientIds, setSelectedClientIds] = useState(() => new Set())
   const [selectedImports, setSelectedImports] = useState({})
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [clientToPipelineOpen, setClientToPipelineOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState(null)
   const [clientToDelete, setClientToDelete] = useState(null)
   const [importToDelete, setImportToDelete] = useState(null)
@@ -188,6 +191,19 @@ export default function Clients() {
     setIsSelectionMenuOpen(false)
   }
 
+  const positionSelectionMenu = () => {
+    const trigger = selectionMenuRef.current?.querySelector('button')
+    if (!trigger) return
+    const triggerBounds = trigger.getBoundingClientRect()
+    const wrapperBounds = selectionMenuRef.current.getBoundingClientRect()
+    const menuWidth = Math.min(288, window.innerWidth - 24)
+    const left = Math.max(12, Math.min(
+      triggerBounds.right - menuWidth,
+      window.innerWidth - menuWidth - 12,
+    ))
+    setSelectionMenuLeft(left - wrapperBounds.left)
+  }
+
   const toggleImportSelection = (clientImport) => {
     if (clientImport.status === 'processing') return
     setSelectedImports((current) => {
@@ -295,15 +311,15 @@ export default function Clients() {
   return (
     <>
       <section className="relative flex min-h-0 flex-1 flex-col gap-4">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 md:px-4">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2 md:gap-3 md:px-4">
           <div
-            className="relative inline-flex rounded-lg border p-1"
+            className="relative inline-flex h-8 shrink-0 rounded-lg border p-0.5 sm:h-auto sm:p-1"
             role="tablist"
             aria-label="Client views"
             style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
           >
             <div
-              className="absolute inset-y-1 rounded-xs bg-[#cc785c] transition-all duration-300 ease-out"
+              className="absolute inset-y-1 rounded-[3px] bg-[#cc785c] transition-all duration-300 ease-out"
               style={{ left: sliderStyle.left, width: sliderStyle.width }}
             />
             {TABS.map((tab, index) => {
@@ -328,7 +344,7 @@ export default function Clients() {
                     }
                     setActiveTab(tab.id)
                   }}
-                  className={`relative z-10 whitespace-nowrap rounded-xs px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${
+                  className={`relative z-10 whitespace-nowrap rounded-xs px-3 py-0 text-xs font-medium transition-colors duration-200 sm:px-4 sm:py-1.5 sm:text-sm ${
                     isActive ? 'text-white' : 'text-[var(--ew-muted)]'
                   }`}
                 >
@@ -337,7 +353,7 @@ export default function Clients() {
               )
             })}
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-3">
             {selectedCount > 0 && canCreate ? (
               <>
                 <div className="relative" ref={selectionMenuRef}>
@@ -346,19 +362,24 @@ export default function Clients() {
                     onClick={() => {
                       setIsAddMenuOpen(false)
                       setIsFilterMenuOpen(false)
-                      setIsSelectionMenuOpen((open) => !open)
+                      const nextOpen = !isSelectionMenuOpen
+                      if (nextOpen) positionSelectionMenu()
+                      setIsSelectionMenuOpen(nextOpen)
                     }}
                     aria-haspopup="menu"
                     aria-expanded={isSelectionMenuOpen}
-                    className="flex h-10 items-center gap-2 rounded-xs bg-[#cc785c] px-3 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e]"
+                    className="flex h-8 items-center gap-1.5 rounded-xs bg-[#cc785c] px-2.5 text-xs font-medium text-white transition-colors hover:bg-[#b36a4e] sm:h-9 sm:gap-2 sm:px-3 sm:text-sm md:h-10"
                   >
                     Select
-                    <LuChevronDown className="h-4 w-4" />
+                    <LuChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </button>
                   {isSelectionMenuOpen && (
                     <div
-                      className="absolute right-0 z-30 mt-2 w-72 rounded-control border bg-surface py-1 shadow-panel"
-                      style={{ borderColor: 'var(--ew-line)' }}
+                      className="absolute left-[var(--selection-menu-left)] right-auto z-30 mt-2 w-[min(18rem,calc(100vw-1.5rem))] rounded-control border bg-surface py-1 shadow-panel md:left-auto md:right-0 md:w-72"
+                      style={{
+                        borderColor: 'var(--ew-line)',
+                        '--selection-menu-left': `${selectionMenuLeft}px`,
+                      }}
                       role="menu"
                       aria-label="Client selection options"
                     >
@@ -449,12 +470,25 @@ export default function Clients() {
                   type="button"
                   onClick={() => {
                     setIsSelectionMenuOpen(false)
+                    setClientToPipelineOpen(true)
+                  }}
+                  aria-label={`Add ${selectedCount} selected clients to CRM`}
+                  title="Add selected clients to CRM"
+                  className="flex h-8 items-center justify-center gap-1.5 rounded-xs bg-[#cc785c] px-2.5 text-xs font-medium text-white transition-colors hover:bg-[#b36a4e] sm:h-9 sm:gap-2 sm:px-3 sm:text-sm md:h-10"
+                >
+                  <span>CRM</span>
+                  <LuArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSelectionMenuOpen(false)
                     setBulkDeleteOpen(true)
                   }}
                   aria-label={`Delete ${selectedCount} selected clients`}
-                  className="flex h-10 w-10 items-center justify-center rounded-xs bg-danger text-white transition-colors hover:bg-danger-strong"
+                  className="flex h-8 w-8 items-center justify-center rounded-xs bg-danger text-white transition-colors hover:bg-danger-strong sm:h-9 sm:w-9 md:h-10 md:w-10"
                 >
-                  <LuTrash2 className="h-4 w-4" />
+                  <LuTrash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </button>
               </>
             ) : (
@@ -464,9 +498,9 @@ export default function Clients() {
                     type="button"
                     onClick={() => setSearchOpen(true)}
                     aria-label="Search clients"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e] sm:h-9 sm:w-9 md:h-10 md:w-10"
                   >
-                    <LuSearch className="h-4 w-4" />
+                    <LuSearch className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </button>
                 )}
                 {canCreate && (
@@ -480,9 +514,9 @@ export default function Clients() {
                       aria-label="Add client options"
                       aria-haspopup="menu"
                       aria-expanded={isAddMenuOpen}
-                      className="flex h-10 w-10 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+                      className="flex h-8 w-8 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e] sm:h-9 sm:w-9 md:h-10 md:w-10"
                     >
-                      <LuPlus className="h-4 w-4" />
+                      <LuPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </button>
                     {isAddMenuOpen && (
                       <div
@@ -528,9 +562,9 @@ export default function Clients() {
                       aria-label="Filter clients by import"
                       aria-haspopup="menu"
                       aria-expanded={isFilterMenuOpen}
-                      className="flex h-10 w-10 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+                      className="flex h-8 w-8 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e] sm:h-9 sm:w-9 md:h-10 md:w-10"
                     >
-                      <LuFilter className="h-4 w-4" />
+                      <LuFilter className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </button>
                     {isFilterMenuOpen && (
                       <div
@@ -720,6 +754,27 @@ export default function Clients() {
             setToast({ message: `${count} selected client${count === 1 ? '' : 's'} deleted`, type: 'success' })
           }}
         />
+        {clientToPipelineOpen ? (
+          <ClientToPipeline
+            open
+            token={token}
+            clientIds={actionableSelectedClientIds}
+            imports={selectedImportRecords}
+            selectedCount={selectedCount}
+            onClose={() => setClientToPipelineOpen(false)}
+            onCompleted={({ added, skipped, missing, pipelineName }) => {
+              setClientToPipelineOpen(false)
+              setSelectedClientIds(new Set())
+              setSelectedImports({})
+              const details = [
+                `${added} client${added === 1 ? '' : 's'} added to ${pipelineName}`,
+                skipped ? `${skipped} already in the pipeline` : null,
+                missing ? `${missing} no longer available` : null,
+              ].filter(Boolean)
+              setToast({ message: details.join('. '), type: 'success' })
+            }}
+          />
+        ) : null}
       </section>
       <ClientDetails
         client={selectedClient}

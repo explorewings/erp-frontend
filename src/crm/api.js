@@ -93,6 +93,15 @@ export async function createCrmDeal(token, pipelineId, client) {
   return readResponse(response, 'Unable to add deal.')
 }
 
+export async function addExistingCrmDeals(token, pipelineId, clientIds) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/deals/existing/bulk`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ clientIds }),
+  })
+  return readResponse(response, 'Unable to add selected clients to the pipeline.')
+}
+
 export async function moveCrmDeal(token, dealId, stageId) {
   const response = await fetch(`${API_BASE_URL}/crm/deals/${dealId}`, {
     method: 'PATCH',

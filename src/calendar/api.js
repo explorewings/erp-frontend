@@ -80,6 +80,11 @@ export async function fetchCalendarUpdates(token, page = 1) {
   return request(token, `/calendar/updates?page=${page}`, {}, 'Unable to load updates.')
 }
 
+/** Audit trail of one event; 404 when the event is not visible to the viewer. */
+export async function fetchCalendarHistory(token, id, page = 1) {
+  return request(token, `/calendar/${id}/history?page=${page}`, {}, 'Unable to load the history.')
+}
+
 export async function fetchCalendarUsers(token) {
   const rows = await request(token, '/settings/users', {}, 'Unable to load people.')
   return (rows ?? [])

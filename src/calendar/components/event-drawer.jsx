@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { LuAlignLeft, LuCircleArrowRight, LuHourglass, LuPencil, LuTrash2 } from 'react-icons/lu'
+import { useEffect, useState } from 'react'
+import { LuAlignLeft, LuCircleArrowRight, LuHistory, LuHourglass, LuPencil, LuTrash2 } from 'react-icons/lu'
 import Loader from '../../appcomponents/loader.jsx'
-import { deleteCalendarEvent, updateCalendarEvent } from '../api.js'
+import { deleteCalendarEvent, fetchCalendarHistory, updateCalendarEvent } from '../api.js'
 import { definitionFor } from '../events/events.jsx'
 import { EVENT_TYPES } from '../lib/event-meta.js'
 import { formatDateTime, formatRelative, fromLocalInput, toLocalInput } from '../lib/dates.js'
@@ -11,6 +11,152 @@ import { DateTimeInput, Field, TextArea } from './form-controls.jsx'
 import { StatusBadge, TypeLabel } from './status-badge.jsx'
 
 const inFuture = (iso) => iso && new Date(iso) > new Date()
+
+/* ---- History tab: the event's audit trail from calendar_event_log ---- */
+
+const ACTION_LABELS = {
+  created: 'Created',
+  updated: 'Edited',
+  status_changed: 'Status changed',
+  deadline_extended: 'Deadline extended',
+  reassigned: 'Reassigned',
+  deleted: 'Deleted',
+}
+
+// Workflow steps land in the log as `status_changed` with meta.step naming the action.
+const STEP_LABELS = {
+  submit: 'Submitted for review',
+  approve: 'Approved',
+  reject: 'Sent back',
+  hold: 'Put on hold',
+  resume: 'Hold lifted',
+  request_cancel: 'Cancellation requested',
+  approve_cancel: 'Cancellation approved',
+  decline_cancel: 'Cancellation declined',
+  withdraw_cancel: 'Cancellation withdrawn',
+  cancel: 'Cancelled',
+  extend: 'Deadline extended',
+  reopen: 'Reopened',
+  request_extension: 'More time requested',
+  approve_extension: 'More time approved',
+  decline_extension: 'More time declined',
+  withdraw_extension: 'More-time request withdrawn',
+}
+
+function labelFor(entry) {
+  if (entry.action === 'status_changed') return (entry.meta?.step && STEP_LABELS[entry.meta.step]) || 'Status changed'
+  return ACTION_LABELS[entry.action] ?? entry.action
+}
+
+const cap = (value) => (value ? value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '')
+
+function HistoryEntry({ entry, last }) {
+  const transition = entry.fromStatus || entry.toStatus
+  return (
+    <li className="relative ml-5 rounded-[10px] border border-line bg-surface px-3 py-2.5">
+      {/* Timeline: dot on the connector line; the line runs down to the next card. */}
+      <span aria-hidden className="absolute -left-[18px] top-4 h-2.5 w-2.5 rounded-full bg-[#cc785c]" />
+      {!last ? <span aria-hidden className="absolute -bottom-[31px] -left-[13px] top-[21px] z-10 w-px bg-[#cc785c]/45" /> : null}
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="min-w-0 truncate text-body-sm text-ink">
+          <span className="font-semibold">{entry.actor?.username ?? 'System'}</span>
+          <span className="text-muted"> · {labelFor(entry)}</span>
+        </p>
+        <time className="shrink-0 text-[11px] tabular-nums text-muted">{formatDateTime(entry.createdAt)}</time>
+      </div>
+      {transition ? (
+        <p className="mt-1 text-meta text-muted">
+          {entry.fromStatus ? cap(entry.fromStatus) : '—'}
+          <span className="mx-1.5 text-accent-strong">→</span>
+          {entry.toStatus ? cap(entry.toStatus) : '—'}
+        </p>
+      ) : null}
+      {entry.reason ? <p className="mt-1 break-words text-meta leading-5 text-ink/75">{entry.reason}</p> : null}
+    </li>
+  )
+}
+
+/** The event's full trail: actors, actions, status transitions, reasons. 20 per page. */
+function HistoryPanel({ token, eventId, revision }) {
+  const [items, setItems] = useState([])
+  const [status, setStatus] = useState('loading')
+  const [error, setError] = useState('')
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    setStatus('loading')
+    setError('')
+    setItems([])
+    setHasMore(false)
+    fetchCalendarHistory(token, eventId, 1)
+      .then((data) => {
+        if (!alive) return
+        setItems(data.items)
+        setHasMore(Boolean(data.hasMore))
+        setStatus('ready')
+      })
+      .catch((err) => {
+        if (!alive) return
+        setError(err.status === 404 ? 'This event is no longer visible to you.' : err.message)
+        setStatus('error')
+      })
+    return () => {
+      alive = false
+    }
+  }, [token, eventId, revision])
+
+  const loadMore = () => {
+    setLoadingMore(true)
+    fetchCalendarHistory(token, eventId, items.length / 20 + 1)
+      .then((data) => {
+        setItems((current) => [...current, ...data.items])
+        setHasMore(Boolean(data.hasMore))
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoadingMore(false))
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="flex h-40 items-center justify-center" role="status" aria-label="Loading history">
+        <Loader size={2} />
+      </div>
+    )
+  }
+  if (status === 'error') {
+    return (
+      <div className="rounded-xs border border-danger/25 bg-danger-soft px-3 py-2.5 text-body-sm text-danger-strong" role="alert">
+        {error}
+      </div>
+    )
+  }
+  return (
+    <ul className="relative space-y-2">
+      {items.map((entry, index) => (
+        <HistoryEntry key={entry.id} entry={entry} last={index === items.length - 1} />
+      ))}
+      {hasMore ? (
+        <li>
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#d9d2c9] bg-white/70 text-xs font-medium text-ink transition-colors hover:border-[#dfae95] hover:bg-[#fff8f3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ew-accent)]/45 disabled:cursor-wait"
+          >
+            {loadingMore ? <Loader size={1.1} /> : 'Load more'}
+          </button>
+        </li>
+      ) : null}
+      {!items.length ? (
+        <li className="rounded-[10px] border border-dashed border-line px-3 py-6 text-center text-body-sm text-muted">
+          No activity recorded yet.
+        </li>
+      ) : null}
+    </ul>
+  )
+}
 
 function initialValues(action, event) {
   const values = {}
@@ -106,6 +252,7 @@ function ActionStep({ action, event, busy, onConfirm, onBack }) {
 
 export default function EventDrawer({ event, viewer, token, users, assignees, onSaved, onDeleted, onClose, notify }) {
   const [mode, setMode] = useState('view')
+  const [tab, setTab] = useState('details')
   const [form, setForm] = useState(null)
   const [formErrors, setFormErrors] = useState({})
   const [pending, setPending] = useState(null)
@@ -149,6 +296,7 @@ export default function EventDrawer({ event, viewer, token, users, assignees, on
     setFormErrors({})
     setPending(null)
     setError('')
+    setTab('details')
     setMode('edit')
   }
 
@@ -178,7 +326,42 @@ export default function EventDrawer({ event, viewer, token, users, assignees, on
   const firstPrimary = actions.findIndex((item) => item.tone === 'primary')
 
   return (
-    <DrawerShell labelledBy="calendar-event-title" header={<TypeLabel type={event.type} />} closeLabel="Close details" busy={busy} closeOnBack onClose={onClose}>
+    <DrawerShell
+      labelledBy="calendar-event-title"
+      closeLabel="Close details"
+      busy={busy}
+      closeOnBack
+      onClose={onClose}
+      header={
+        mode === 'edit' ? (
+          <TypeLabel type={event.type} />
+        ) : (
+          <div role="tablist" aria-label={`${typeLabel} views`} className="flex items-center gap-1">
+            <button
+              role="tab"
+              aria-selected={tab === 'details'}
+              onClick={() => setTab('details')}
+              className={`rounded-xs px-2 py-1 text-meta font-medium transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 ${
+                tab === 'details' ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:bg-ground hover:text-ink'
+              }`}
+            >
+              <TypeLabel type={event.type} />
+            </button>
+            <button
+              role="tab"
+              aria-selected={tab === 'history'}
+              onClick={() => setTab('history')}
+              className={`inline-flex items-center gap-1.5 rounded-xs px-2 py-1 text-meta font-medium transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 ${
+                tab === 'history' ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:bg-ground hover:text-ink'
+              }`}
+            >
+              <LuHistory className="h-3.5 w-3.5" aria-hidden="true" />
+              History
+            </button>
+          </div>
+        )
+      }
+    >
       {mode === 'edit' ? (
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={saveEdit} aria-busy={busy} noValidate>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
@@ -205,6 +388,15 @@ export default function EventDrawer({ event, viewer, token, users, assignees, on
             </button>
           </footer>
         </form>
+      ) : tab === 'history' ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <h2 id="calendar-event-title" className="sr-only">
+            History
+          </h2>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+            <HistoryPanel token={token} eventId={event.id} revision={event.updatedAt} />
+          </div>
+        </div>
       ) : (
         <>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5" aria-busy={busy}>

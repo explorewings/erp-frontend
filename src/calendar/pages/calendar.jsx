@@ -160,15 +160,6 @@ export default function Calendar() {
           />
           <div className="flex shrink-0 items-center gap-2 lg:hidden">
             <NewEventMenu creatable={creatable} onPick={setAddType} iconOnly />
-            <button
-              type="button"
-              onClick={() => setScheduleOpen(true)}
-              aria-haspopup="dialog"
-              aria-expanded={scheduleOpen}
-              className="inline-flex h-8 shrink-0 items-center justify-center rounded-xs border border-[#cc785c]/45 bg-accent-soft px-2.5 text-label font-medium text-accent-strong transition-colors hover:border-[#cc785c] hover:bg-[#ffeee4] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:h-9 sm:px-3 sm:text-body-sm lg:hidden"
-            >
-              Events
-            </button>
           </div>
         </header>
         {status === 'error' ? (

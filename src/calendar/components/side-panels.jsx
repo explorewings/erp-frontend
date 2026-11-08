@@ -78,14 +78,16 @@ function EventCard({ event, viewerId, onOpen }) {
   )
 }
 
-/** Everything on the selected day, as a kanban-style column that fills its height. */
+/** Everything on the selected day, as a kanban-style column that fills its height.
+ *  Ordered by latest update first, so freshly changed items surface on top. */
 export function SchedulePanel({ day, events, viewerId, loading, error, onRetry, hasMore, loadingMore, onLoadMore, onOpenEvent }) {
+  const ordered = [...events].sort((a, b) => new Date(b.updatedAt ?? 0) - new Date(a.updatedAt ?? 0));
   return (
     <section className="flex h-full min-h-0 flex-col" aria-label={`Schedule for ${formatDayLong(day)}`}>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto border p-2.5" style={lane}>
-        {events.length ? (
+        {ordered.length ? (
           <>
-            {events.map((event) => (
+            {ordered.map((event) => (
               <EventCard key={event.id} event={event} viewerId={viewerId} onOpen={onOpenEvent} />
             ))}
             {error ? (
