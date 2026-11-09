@@ -37,6 +37,14 @@ export async function createClient(token, payload) {
   return readResponse(response, 'Unable to create client.')
 }
 
+export async function fetchClientHistory(token, id, page = 1) {
+  const response = await fetch(
+    `${API_BASE_URL}/clients/${id}/history?page=${page}`,
+    { headers: authHeaders(token) },
+  )
+  return readResponse(response, 'Unable to load client history.')
+}
+
 export async function updateClient(token, id, payload) {
   const response = await fetch(`${API_BASE_URL}/clients/${id}`, {
     method: 'PATCH',
@@ -87,18 +95,23 @@ export async function fetchClientImports(token) {
   })
   const imports = await readResponse(response, 'Unable to load client imports.')
   if (!Array.isArray(imports)) return imports
-
+  // Resolve each import's live client count from GET /clients?importId=
+  // (limit 1, in parallel). The list endpoint's own clientCount subquery
+  // has been observed to disagree with this ground truth, so the live
+  // total wins for cards, filter, and selection counts.
   return Promise.all(imports.map(async (clientImport) => {
-    const clients = await fetchClients(token, {
-      page: 1,
-      limit: 1,
-      importId: clientImport.id,
-    })
-    const clientCount = Number(clients?.total)
-    if (!Number.isInteger(clientCount) || clientCount < 0) {
-      throw new Error(`The server returned an invalid client count for "${clientImport.name}".`)
+    try {
+      const clients = await fetchClients(token, { page: 1, limit: 1, importId: clientImport.id })
+      const clientCount = Number(clients?.total)
+      if (!Number.isInteger(clientCount) || clientCount < 0) throw new Error('invalid count')
+      return { ...clientImport, clientCount }
+    } catch {
+      const fallback = Number(clientImport.clientCount)
+      return {
+        ...clientImport,
+        clientCount: Number.isInteger(fallback) && fallback >= 0 ? fallback : 0,
+      }
     }
-    return { ...clientImport, clientCount }
   }))
 }
 

@@ -29,7 +29,7 @@ const fieldClass =
   'h-9 rounded-xs border bg-surface px-3 text-sm text-[var(--ew-ink)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20'
 const fieldStyle = { borderColor: 'var(--ew-field-line)' }
 
-/** Numbered step markers shown in the modal header while creating. */
+/** Numbered step markers shown in the drawer header while creating. */
 export function StepIndicator({ step }) {
   return (
     <div className="relative flex w-2/5 shrink-0 items-center justify-between gap-2 px-2">
@@ -263,8 +263,8 @@ function AllowedUsersPicker({ users, currentUserId, selectedIds, onChange }) {
 }
 
 /**
- * Create tab of the pipeline modal: name + template, stages, allowed users.
- * The modal owns `step` so it can show the step markers in its header.
+ * Create tab of the pipeline drawer: name + template, stages, allowed users.
+ * The drawer owns `step` so it can show the step markers in its header.
  */
 export default function CreatePipelineWizard({ token, user, step, onStepChange, onBusyChange, onCreated }) {
   const [name, setName] = useState('')

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuCalendar, LuChevronDown, LuCheck, LuCopy, LuLayers, LuX } from 'react-icons/lu'
+import { LuCalendar, LuChevronDown, LuCheck, LuCopy, LuLayers, LuUser, LuX } from 'react-icons/lu'
 import { MdKeyboardDoubleArrowRight } from 'react-icons/md'
 import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
 
@@ -237,6 +237,13 @@ export default function DealDetailsDrawer({ deal, pipeline, stages = [], onClose
                     Pipeline
                   </dt>
                   <dd className="truncate text-sm text-[var(--ew-ink)]">{pipeline?.name || '—'}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 px-3 py-2.5">
+                  <dt className="flex items-center gap-2 text-xs text-[var(--ew-muted)]">
+                    <LuUser className="h-3.5 w-3.5" aria-hidden="true" />
+                    Added by
+                  </dt>
+                  <dd className="truncate text-sm text-[var(--ew-ink)]">{deal.createdByUsername || '—'}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4 px-3 py-2.5">
                   <dt className="flex items-center gap-2 text-xs text-[var(--ew-muted)]">

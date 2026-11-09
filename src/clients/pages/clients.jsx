@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { LuArrowRight, LuCheck, LuChevronDown, LuChevronRight, LuFilter, LuPlus, LuSearch, LuTrash2 } from 'react-icons/lu'
+import { LuArrowRight, LuCheck, LuChevronDown, LuChevronRight, LuFilter, LuPlus, LuSearch, LuTrash2, LuX } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
 import Alert from '../../appcomponents/alert.jsx'
 import Loader from '../../appcomponents/loader.jsx'
@@ -53,6 +53,16 @@ export default function Clients() {
   const [isImportSelectorExpanded, setIsImportSelectorExpanded] = useState(false)
   const [selectedClientIds, setSelectedClientIds] = useState(() => new Set())
   const [selectedImports, setSelectedImports] = useState({})
+  // Live totals for the SELECTED imports only (limit-1 queries). The imports
+  // list's clientCount can be stale/zero in a session; the Select (N) count
+  // must reflect the true number of clients the selection contains.
+  const [liveImportCounts, setLiveImportCounts] = useState({})
+  // Server-side search field inside the Select dropdown (same endpoint and
+  // 300ms debounce as the search modal). Matches render in the main Clients
+  // table / mobile cards below, where the user ticks them — the modal cannot
+  // be summoned while in selection state, so this drives the table directly.
+  const [selectionSearch, setSelectionSearch] = useState('')
+  const [debouncedSelectionSearch, setDebouncedSelectionSearch] = useState('')
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [clientToPipelineOpen, setClientToPipelineOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState(null)
@@ -89,7 +99,10 @@ export default function Clients() {
     const handlePointerDown = (event) => {
       if (!addMenuRef.current?.contains(event.target)) setIsAddMenuOpen(false)
       if (!filterMenuRef.current?.contains(event.target)) setIsFilterMenuOpen(false)
-      if (!selectionMenuRef.current?.contains(event.target)) setIsSelectionMenuOpen(false)
+      // Deliberately NO outside-click close for the Select dropdown: the user
+      // ticks results in the table (below/outside the menu) while searching,
+      // and dismissing on those clicks ate the selection. It closes via the
+      // Select toggle, Escape, Clear selection, or CRM/Delete.
     }
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') setIsAddMenuOpen(false)
@@ -114,7 +127,7 @@ export default function Clients() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    fetchClients(token, { page, limit: LIMIT, importId: selectedImportId })
+    fetchClients(token, { page, limit: LIMIT, importId: selectedImportId, search: debouncedSelectionSearch || undefined })
       .then((data) => {
         if (cancelled) return
         const nextItems = Array.isArray(data?.items) ? data.items : []
@@ -132,7 +145,23 @@ export default function Clients() {
     return () => {
       cancelled = true
     }
-  }, [token, page, refreshKey, selectedImportId])
+  }, [token, page, refreshKey, selectedImportId, debouncedSelectionSearch])
+
+  // A new search starts from page 1 of the results (like the search modal).
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSelectionSearch])
+
+  // Debounce the dropdown search input (300ms, like the search modal).
+  // The search PERSISTS after the menu closes (like a filter): closing the
+  // menu on an outside click must not clear it, otherwise the table snaps
+  // back to unfiltered and the row the user clicked disappears before the
+  // tick registers. It clears only via the input's clear button or
+  // "Clear selection".
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSelectionSearch(selectionSearch.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [selectionSearch])
 
   useEffect(() => {
     if (!token) return undefined
@@ -161,12 +190,39 @@ export default function Clients() {
     const client = knownClientsRef.current.get(id)
     return !client?.importId || !selectedImportIds.has(client.importId)
   })
+  const selectedImportIdsKey = Object.keys(selectedImports).sort().join(',')
+  useEffect(() => {
+    if (!token || !selectedImportIdsKey) return undefined
+    let cancelled = false
+    const ids = selectedImportIdsKey.split(',').map(Number)
+    Promise.all(
+      ids.map(async (importId) => {
+        try {
+          const data = await fetchClients(token, { page: 1, limit: 1, importId })
+          return [importId, Number(data?.total) || 0]
+        } catch {
+          return [importId, null]
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return
+      setLiveImportCounts(Object.fromEntries(entries.filter(([, count]) => count !== null)))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [token, selectedImportIdsKey])
+
   const selectedCount = actionableSelectedClientIds.length
     + Object.values(selectedImports).reduce(
-      (sum, clientImport) => sum + (Number(clientImport.clientCount ?? clientImport.importedRows) || 0),
+      (sum, clientImport) => sum + ((liveImportCounts[clientImport.id] ?? Number(clientImport.clientCount ?? clientImport.importedRows)) || 0),
       0,
     )
   const selectedImportRecords = Object.values(selectedImports)
+  // Selecting an import IS a selection, even when its current client count is
+  // 0 (e.g. a failed import). Visibility must not depend on the count alone,
+  // otherwise ticking such an import makes the action buttons vanish.
+  const hasSelection = actionableSelectedClientIds.length > 0 || selectedImportRecords.length > 0
   const isClientSelected = (client) =>
     selectedClientIds.has(client.id) || selectedImportIds.has(client.importId)
 
@@ -354,7 +410,7 @@ export default function Clients() {
             })}
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-3">
-            {selectedCount > 0 && canCreate ? (
+            {hasSelection && canCreate ? (
               <>
                 <div className="relative" ref={selectionMenuRef}>
                   <button
@@ -368,9 +424,10 @@ export default function Clients() {
                     }}
                     aria-haspopup="menu"
                     aria-expanded={isSelectionMenuOpen}
+                    aria-label={`Selection options, ${selectedCount} selected`}
                     className="flex h-8 items-center gap-1.5 rounded-xs bg-[#cc785c] px-2.5 text-xs font-medium text-white transition-colors hover:bg-[#b36a4e] sm:h-9 sm:gap-2 sm:px-3 sm:text-sm md:h-10"
                   >
-                    Select
+                    Select ({selectedCount})
                     <LuChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </button>
                   {isSelectionMenuOpen && (
@@ -383,6 +440,39 @@ export default function Clients() {
                       role="menu"
                       aria-label="Client selection options"
                     >
+                      <div className="px-2 pt-2 pb-1">
+                        <div className="relative">
+                          <LuSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ew-muted)]" aria-hidden="true" />
+                          <input
+                            type="text"
+                            role="searchbox"
+                            value={selectionSearch}
+                            onChange={(event) => setSelectionSearch(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') event.preventDefault()
+                            }}
+                            placeholder="Search clients to add..."
+                            aria-label="Search clients to add to the selection"
+                            className="h-9 w-full rounded-xs border bg-surface pl-9 pr-9 text-sm text-[var(--ew-ink)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                            style={{ borderColor: 'var(--ew-field-line)' }}
+                          />
+                          {selectionSearch ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectionSearch('')}
+                              aria-label="Clear search"
+                              className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-xs text-[var(--ew-muted)] transition-colors hover:bg-ground hover:text-[var(--ew-ink)]"
+                            >
+                              <LuX className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      {debouncedSelectionSearch ? (
+                        <p className="px-4 pt-1 pb-1 text-xs text-[var(--ew-muted)]" role="status">
+                          {total} result{total === 1 ? '' : 's'} in table — tick clients there. Search stays until cleared.
+                        </p>
+                      ) : null}
                       <button
                         type="button"
                         role="menuitem"
@@ -456,6 +546,7 @@ export default function Clients() {
                         onClick={() => {
                           setSelectedClientIds(new Set())
                           setSelectedImports({})
+                          setSelectionSearch('')
                           setIsSelectionMenuOpen(false)
                         }}
                         className="w-full border-t px-4 py-2.5 text-left text-sm text-[var(--ew-muted)] transition-colors hover:bg-ground/70"

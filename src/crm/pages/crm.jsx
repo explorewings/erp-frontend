@@ -18,7 +18,7 @@ import DealDetailsDrawer from '../components/deal-details-drawer.jsx'
 import CrmSearchModal from '../components/crm-search-modal.jsx'
 import InlineError from '../components/inline-error.jsx'
 import KanbanBoard from '../components/kanban-board.jsx'
-import ManagePipelineModal from '../components/manage-pipeline-modal.jsx'
+import ManagePipelineDrawer from '../components/manage-pipeline-drawer.jsx'
 import ManageStageDrawer from '../components/manage-stage-drawer.jsx'
 import PipelineSelect from '../components/pipeline-select.jsx'
 import PipelineTag from '../components/pipeline-tag.jsx'
@@ -130,7 +130,7 @@ export default function Crm() {
   const [selectedPipelineId, setSelectedPipelineId] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [pipelineModalTab, setPipelineModalTab] = useState(null)
+  const [pipelineDrawerTab, setPipelineDrawerTab] = useState(null)
   const [isStageDrawerOpen, setIsStageDrawerOpen] = useState(false)
   const [isAddDealOpen, setIsAddDealOpen] = useState(false)
   const [detailsDeal, setDetailsDeal] = useState(null)
@@ -170,7 +170,7 @@ export default function Crm() {
   const scrollBoard = (direction) => scrollBoardByColumns(boardScrollerRef.current, direction)
 
   const actionHandlers = {
-    'manage-pipelines': () => setPipelineModalTab('manage'),
+    'manage-pipelines': () => setPipelineDrawerTab('manage'),
     'manage-stages': () => setIsStageDrawerOpen(true),
   }
 
@@ -303,7 +303,7 @@ export default function Crm() {
                     hasPipeline={Boolean(selectedPipeline)}
                     onDealMove={dealsError ? undefined : moveDeal}
                     onViewDeal={setDetailsDeal}
-                    onCreatePipeline={() => setPipelineModalTab('create')}
+                    onCreatePipeline={() => setPipelineDrawerTab('create')}
                   />
                 )}
               </>
@@ -354,16 +354,16 @@ export default function Crm() {
           onClose={() => setIsStageDrawerOpen(false)}
           onStagesChange={(pipelineId, nextStages) => updatePipeline(pipelineId, { stages: nextStages })}
         />
-        <ManagePipelineModal
-          open={pipelineModalTab !== null}
-          initialTab={pipelineModalTab ?? 'manage'}
+        <ManagePipelineDrawer
+          open={pipelineDrawerTab !== null}
+          initialTab={pipelineDrawerTab ?? 'manage'}
           token={token}
           user={user}
           pipelines={pipelines}
           isLoading={isLoading}
           loadError={loadError}
           onRetry={reload}
-          onClose={() => setPipelineModalTab(null)}
+          onClose={() => setPipelineDrawerTab(null)}
           onCreated={(created) => {
             addPipeline(created)
             selectPipeline(String(created.id))

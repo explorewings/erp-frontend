@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuPlus, LuPencil, LuTrash2, LuX } from 'react-icons/lu'
-import { updateClient } from '../api.js'
+import Loader from '../../appcomponents/loader.jsx'
+import { fetchClientHistory, updateClient } from '../api.js'
+
+const TABS = [
+  { id: 'details', label: 'Details' },
+  { id: 'history', label: 'History' },
+]
 
 function formatDate(value) {
   if (!value) return '-'
@@ -10,6 +16,144 @@ function formatDate(value) {
     month: 'long',
     day: 'numeric',
   })
+}
+
+function formatDateTime(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+/* ---- History tab: thread from client_activity_log (mirrors calendar event History) ---- */
+
+const ACTION_LABELS = { created: 'Added client', updated: 'Edited client', added_to_pipeline: 'Added to pipeline' }
+
+function labelFor(entry) {
+  return ACTION_LABELS[entry.action] ?? entry.action
+}
+
+function sourceLine(entry) {
+  const meta = entry.meta || {}
+  if (entry.action === 'added_to_pipeline') {
+    return meta.pipelineName ? `Added to pipeline "${meta.pipelineName}"` : 'Added to a pipeline'
+  }
+  if (entry.action === 'created') {
+    if (meta.source === 'imported') {
+      return meta.importName ? `Imported via "${meta.importName}"` : 'Imported'
+    }
+    if (meta.via === 'crm') {
+      return meta.pipelineName ? `Added manually via CRM to "${meta.pipelineName}"` : 'Added manually via CRM'
+    }
+    return 'Added manually'
+  }
+  if (Array.isArray(meta.changedFields) && meta.changedFields.length) {
+    const pretty = meta.changedFields.map((f) => (f === 'customFields' ? 'additional fields' : f))
+    return `Changed: ${pretty.join(', ')}`
+  }
+  return null
+}
+
+function HistoryEntry({ entry, last }) {
+  const detail = sourceLine(entry)
+  return (
+    <li className="relative ml-5 rounded-[10px] border px-3 py-2.5" style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}>
+      {/* Timeline: dot on the connector line; the line runs down to the next card. */}
+      <span aria-hidden className="absolute -left-[18px] top-4 h-2.5 w-2.5 rounded-full bg-[#cc785c]" />
+      {!last ? <span aria-hidden className="absolute -bottom-[31px] -left-[13px] top-[21px] z-10 w-px bg-[#cc785c]/45" /> : null}
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="min-w-0 truncate text-sm text-[var(--ew-ink)]">
+          <span className="font-semibold">{entry.actor?.username ?? 'System'}</span>
+          <span className="text-[var(--ew-muted)]"> · {labelFor(entry)}</span>
+        </p>
+        <time className="shrink-0 text-[11px] tabular-nums text-[var(--ew-muted)]">{formatDateTime(entry.createdAt)}</time>
+      </div>
+      {detail ? <p className="mt-1 text-xs text-[var(--ew-muted)]">{detail}</p> : null}
+    </li>
+  )
+}
+
+/** Thread of client activity, latest first, 20 per page (same as calendar HistoryPanel). */
+function HistoryPanel({ token, clientId, revision }) {
+  const [items, setItems] = useState([])
+  const [status, setStatus] = useState('loading')
+  const [error, setError] = useState('')
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    setStatus('loading')
+    setError('')
+    setItems([])
+    setHasMore(false)
+    fetchClientHistory(token, clientId, 1)
+      .then((data) => {
+        if (!alive) return
+        setItems(Array.isArray(data?.items) ? data.items : [])
+        setHasMore(Boolean(data?.hasMore))
+        setStatus('ready')
+      })
+      .catch((err) => {
+        if (!alive) return
+        setError(err?.message || 'Unable to load history.')
+        setStatus('error')
+      })
+    return () => {
+      alive = false
+    }
+  }, [token, clientId, revision])
+
+  const loadMore = () => {
+    setLoadingMore(true)
+    fetchClientHistory(token, clientId, items.length / 20 + 1)
+      .then((data) => {
+        setItems((current) => [...current, ...(Array.isArray(data?.items) ? data.items : [])])
+        setHasMore(Boolean(data?.hasMore))
+      })
+      .catch((err) => setError(err?.message || 'Unable to load history.'))
+      .finally(() => setLoadingMore(false))
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="flex h-40 items-center justify-center" role="status" aria-label="Loading history">
+        <Loader size={2} />
+      </div>
+    )
+  }
+  if (status === 'error') {
+    return (
+      <div className="rounded-xs border border-danger/25 bg-danger-soft px-3 py-2.5 text-sm text-danger-strong" role="alert">
+        {error}
+      </div>
+    )
+  }
+  return (
+    <ul className="relative space-y-2">
+      {items.map((entry, index) => (
+        <HistoryEntry key={entry.id} entry={entry} last={index === items.length - 1} />
+      ))}
+      {hasMore ? (
+        <li>
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-[10px] border border-dashed text-xs font-medium transition-colors disabled:cursor-wait"
+            style={{ borderColor: 'var(--ew-line)' }}
+          >
+            {loadingMore ? <Loader size={1.1} /> : 'Load more'}
+          </button>
+        </li>
+      ) : null}
+      {!items.length ? (
+        <li className="rounded-[10px] border border-dashed px-3 py-6 text-center text-sm text-[var(--ew-muted)]" style={{ borderColor: 'var(--ew-line)' }}>
+          No activity recorded yet.
+        </li>
+      ) : null}
+    </ul>
+  )
 }
 
 export default function ClientDetails({
@@ -23,6 +167,9 @@ export default function ClientDetails({
 }) {
   const onCloseRef = useRef(onClose)
   const ignorePopRef = useRef(false)
+  const [tab, setTab] = useState('details')
+  const [sliderStyle, setSliderStyle] = useState({ left: 0, width: 0 })
+  const tabRefs = useRef([])
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', phoneNumber: '' })
   const [customFields, setCustomFields] = useState([])
@@ -33,6 +180,7 @@ export default function ClientDetails({
   useEffect(() => {
     setEditing(false)
     setEditError('')
+    setTab('details')
   }, [client?.id])
 
   useEffect(() => {
@@ -63,6 +211,23 @@ export default function ClientDetails({
     onCloseRef.current = onClose
   }, [onClose])
 
+  // Sliding highlight for the Details/History tabs (same UI as Clients/Imports).
+  // `client?.id` is a dependency because this component stays mounted while
+  // `client` is null (rendering nothing); the effect must re-run when the
+  // drawer first opens, otherwise the slider stays at width 0 and the active
+  // tab's white text is invisible on the light background.
+  useEffect(() => {
+    const update = () => {
+      const index = TABS.findIndex((item) => item.id === tab)
+      const node = tabRefs.current[index]
+      if (!node) return
+      setSliderStyle({ left: node.offsetLeft, width: node.offsetWidth })
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [tab, client?.id])
+
   if (!client) return null
 
   const fields = Object.entries(client.customFields || {})
@@ -79,6 +244,7 @@ export default function ClientDetails({
   }
 
   const startEditing = () => {
+    setTab('details')
     setForm({
       name: client.name || '',
       email: client.email || '',
@@ -161,14 +327,51 @@ export default function ClientDetails({
         style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
       >
         <header className="flex h-16 shrink-0 items-center justify-between border-b px-5" style={{ borderColor: 'var(--ew-line)' }}>
-          <h2 id="client-details-title" className="text-title text-[var(--ew-ink)]">Client details</h2>
+          <div
+            className="relative inline-flex rounded-lg border p-1"
+            role="tablist"
+            aria-label="Client views"
+            style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
+          >
+            <div
+              className="absolute inset-y-1 rounded-[3px] bg-[#cc785c] transition-all duration-300 ease-out"
+              style={{ left: sliderStyle.left, width: sliderStyle.width }}
+            />
+            {TABS.map((item, index) => {
+              const isActive = tab === item.id
+              return (
+                <button
+                  key={item.id}
+                  ref={(node) => {
+                    tabRefs.current[index] = node
+                  }}
+                  id={`client-details-tab-${item.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`client-details-panel-${item.id}`}
+                  onClick={() => setTab(item.id)}
+                  className={`relative z-10 whitespace-nowrap rounded-xs px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${isActive ? 'text-white' : 'text-[var(--ew-muted)]'}`}
+                >
+                  {item.label}
+                </button>
+              )
+            })}
+          </div>
           <button type="button" onClick={closeDetails} aria-label="Close client details" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xs border text-[var(--ew-muted)] hover:bg-ground hover:text-[var(--ew-ink)]" style={{ borderColor: 'var(--ew-line)' }}>
             <LuX className="h-4 w-4" />
           </button>
         </header>
 
+        {tab === 'history' ? (
+          <div id="client-details-panel-history" role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-5">
+            <h2 id="client-details-title" className="sr-only">History</h2>
+            <HistoryPanel token={token} clientId={client.id} revision={client.updatedAt || client.createdAt} />
+          </div>
+        ) : (
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={saveChanges}>
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
+        <div id="client-details-panel-details" role="tabpanel" className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
+          <h2 id="client-details-title" className="sr-only">Client details</h2>
           <section>
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ew-muted)]">Contact</h3>
             <dl className="divide-y rounded-lg border px-4" style={{ borderColor: 'var(--ew-line)' }}>
@@ -193,6 +396,14 @@ export default function ClientDetails({
               <div className="grid grid-cols-[7rem_1fr] gap-3 py-3 text-sm">
                 <dt className="text-[var(--ew-muted)]">Added</dt>
                 <dd className="font-medium text-[var(--ew-ink)]">{formatDate(client.createdAt)}</dd>
+              </div>
+              <div className="grid grid-cols-[7rem_1fr] gap-3 py-3 text-sm">
+                <dt className="text-[var(--ew-muted)]">Added by</dt>
+                <dd className="font-medium text-[var(--ew-ink)]">{client.createdByUsername || '—'}</dd>
+              </div>
+              <div className="grid grid-cols-[7rem_1fr] gap-3 py-3 text-sm">
+                <dt className="text-[var(--ew-muted)]">Source</dt>
+                <dd className="font-medium capitalize text-[var(--ew-ink)]">{client.source === 'imported' ? `Imported${client.importName ? ` via "${client.importName}"` : ''}` : 'Manual'}</dd>
               </div>
             </dl>
           </section>
@@ -302,6 +513,7 @@ export default function ClientDetails({
           </footer>
         )}
         </form>
+        )}
       </aside>
     </div>,
     document.body,
