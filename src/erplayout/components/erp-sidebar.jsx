@@ -34,7 +34,7 @@ function BrandLockup({ collapsed }) {
 
 export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse }) {
   const signOut = useSignOut()
-  const { canAccess } = useAuth()
+  const { canAccess, menuAccessLoading } = useAuth()
   const [confirmSignOut, setConfirmSignOut] = useState(false)
   const handleSignOut = () => setConfirmSignOut(true)
   const confirmSignOutNow = () => {
@@ -77,7 +77,9 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
           </p>
 
           <ul className="divide-y divide-line overflow-hidden rounded-xs border border-line">
-            {NAV_ITEMS.filter((item) => canAccess(item.key)).map(({ label, to, Icon }) => (
+            {menuAccessLoading ? (
+              <li className="px-3 py-3 text-sm text-muted" role="status">Loading menus...</li>
+            ) : NAV_ITEMS.filter((item) => canAccess(item.key)).map(({ label, to, Icon }) => (
               <li key={to}>
                 <NavLink
                   to={to}

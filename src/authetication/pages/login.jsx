@@ -18,7 +18,7 @@ export default function Login() {
     try {
       const { user } = await login(credentials)
       setMessage({ type: 'success', text: `Welcome back, ${user.username}.` })
-      navigate('/erp/calendar', { replace: true })
+      navigate('/erp', { replace: true })
     } catch (error) {
       const text = error.message || 'Something went wrong. Try again.'
       if (text.toLowerCase().includes('deactivated')) {

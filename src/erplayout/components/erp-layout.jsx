@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
+import { useAuth } from '../../authetication/auth-context.js'
 import ErpSidebar from './erp-sidebar.jsx'
 import ErpTopbar from './erp-topbar.jsx'
 
@@ -14,6 +15,7 @@ function readCollapsed() {
 }
 
 export default function ErpLayout() {
+  const { accessRefreshError } = useAuth()
   const [navOpen, setNavOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const { pathname } = useLocation()
@@ -51,6 +53,11 @@ export default function ErpLayout() {
               : 'overflow-y-auto py-6 sm:px-8 sm:py-8'
           }`}
         >
+          {accessRefreshError ? (
+            <p role="alert" className="mb-3 rounded-xs border border-danger/30 bg-danger/5 px-4 py-2 text-sm text-danger-strong">
+              {accessRefreshError}
+            </p>
+          ) : null}
           <div
             key={pathname}
             className={

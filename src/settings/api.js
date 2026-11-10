@@ -120,11 +120,22 @@ export async function checkUserAvailability(token, payload) {
 }
 
 export async function fetchMyAccess(token) {
-  const response = await fetch(`${API_BASE_URL}/settings/access/me`, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-  }).catch(() => null)
-  if (!response || !response.ok) return { codes: null }
-  return response.json().catch(() => ({ codes: null }))
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/settings/access/me`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    })
+  } catch {
+    throw new Error('Cannot reach the server while refreshing menu access.')
+  }
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(getApiErrorMessage(response, data, 'Unable to refresh menu access.'))
+  }
+  if (!data || !Array.isArray(data.grantedMenus) || typeof data.role !== 'string') {
+    throw new Error('The server returned invalid menu access.')
+  }
+  return data
 }
 
 export async function fetchAccess(token, userId) {

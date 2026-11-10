@@ -3,14 +3,16 @@ import { getSectionLabel } from '../nav.js'
 import { MenuIcon } from '../../components/icons.jsx'
 import UserMenu from './user-menu.jsx'
 import NotificationBell from '../../notifications/components/notification-bell.jsx'
+import { useAuth } from '../../authetication/auth-context.js'
 
 export default function ErpTopbar({ onMenu }) {
   const { pathname } = useLocation()
+  const { canAccess } = useAuth()
   const section = getSectionLabel(pathname)
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-surface px-4 sm:px-6">
-      <NotificationBell className="order-3 lg:order-2" />
+      {canAccess('menu:calendar') ? <NotificationBell className="order-3 lg:order-2" /> : null}
       <button
         type="button"
         onClick={onMenu}

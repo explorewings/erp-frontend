@@ -3,6 +3,7 @@ import {
   ClientsIcon,
   CrmIcon,
   PackagesIcon,
+  ReportsIcon,
   ResortsIcon,
   SettingsIcon,
 } from '../components/icons.jsx'
@@ -42,6 +43,13 @@ export const NAV_ITEMS = [
     to: '/erp/packages',
     Icon: PackagesIcon,
     description: 'Itineraries, durations, and pricing.',
+  },
+  {
+    key: 'menu:reports',
+    label: 'Reports',
+    to: '/erp/reports',
+    Icon: ReportsIcon,
+    description: 'Daily pointwise work reports and review.',
   },
   {
     key: 'menu:settings',

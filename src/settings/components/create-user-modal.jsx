@@ -36,7 +36,6 @@ export default function CreateUserModal({
   const [step, setStep] = useState(1)
   const [selectedCodes, setSelectedCodes] = useState([])
   const [horizontalOffset, setHorizontalOffset] = useState(0)
-  const permissionsInitializedRef = useRef(false)
   onCloseRef.current = onClose
 
   useEffect(() => {
@@ -68,31 +67,9 @@ export default function CreateUserModal({
       setSelectedCodes([])
       setShowPassword(false)
       setPasswordRequirementsError(null)
-      permissionsInitializedRef.current = false
       setError(null)
-    } else {
-      permissionsInitializedRef.current = false
     }
   }, [open])
-
-  useEffect(() => {
-    if (
-      !open ||
-      permissionsInitializedRef.current ||
-      accessItemsLoading ||
-      accessItemsError ||
-      accessItems.length === 0
-    ) {
-      return
-    }
-
-    setSelectedCodes(
-      accessItems
-        .filter((item) => item.code !== 'menu:settings')
-        .map((item) => item.code),
-    )
-    permissionsInitializedRef.current = true
-  }, [open, accessItems, accessItemsLoading, accessItemsError])
 
   useEffect(() => {
     if (!open) return undefined

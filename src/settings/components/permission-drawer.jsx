@@ -35,8 +35,7 @@ export default function PermissionDrawer({ menu, open, token, users, onClose, on
         const rowMap = new Map((Array.isArray(rows) ? rows : []).map((row) => [row.userId, row.allowed]))
         const next = new Set()
         for (const user of users || []) {
-          const hasRow = rowMap.has(user.id)
-          const allowed = hasRow ? rowMap.get(user.id) : true
+          const allowed = rowMap.get(user.id) === true
           if (allowed) next.add(user.id)
         }
         setSelected(next)

@@ -30,7 +30,7 @@ export default function Settings() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [permissionsUser, setPermissionsUser] = useState(null)
-  const [permissionCodes, setPermissionCodes] = useState(null)
+  const [permissionCodes, setPermissionCodes] = useState([])
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false)
   const [isSavingPermissions, setIsSavingPermissions] = useState(false)
   const [permissionError, setPermissionError] = useState(null)
@@ -102,10 +102,9 @@ export default function Settings() {
     fetchAccess(token, permissionsUser.id)
       .then((rows) => {
         if (cancelled) return
-        const codes = Array.isArray(rows) && rows.length
+        setPermissionCodes(Array.isArray(rows)
           ? rows.filter((row) => row.allowed).map((row) => row.code)
-          : null
-        setPermissionCodes(codes)
+          : [])
       })
       .catch((err) => {
         if (cancelled) return
@@ -123,11 +122,8 @@ export default function Settings() {
     if (!permissionsUser || !token) return
     setIsSavingPermissions(true)
     setPermissionError(null)
-    const selectedCodes = permissionCodes === null
-      ? NAV_ITEMS.map((item) => item.key)
-      : permissionCodes
     try {
-      await saveAccess(token, permissionsUser.id, selectedCodes)
+      await saveAccess(token, permissionsUser.id, permissionCodes)
       setToast({ message: 'Access updated', type: 'success' })
     } catch (err) {
       setPermissionError(err?.message || 'Unable to save access.')

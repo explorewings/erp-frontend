@@ -2,6 +2,7 @@ import {
   LuChevronRight,
   LuCircleAlert,
   LuCircleCheck,
+  LuClipboardList,
   LuEye,
   LuEyeOff,
   LuLogOut,
@@ -49,6 +50,10 @@ export function ClientsIcon(props) {
 
 export function CrmIcon(props) {
   return <FaChartBar {...solid} {...props} />
+}
+
+export function ReportsIcon(props) {
+  return <LuClipboardList {...outline} {...props} />
 }
 
 export function SettingsIcon(props) {
