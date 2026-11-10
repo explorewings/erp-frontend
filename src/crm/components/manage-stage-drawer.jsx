@@ -9,9 +9,9 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { LuCheck, LuGripVertical, LuLayers, LuPencil, LuX } from 'react-icons/lu'
+import { LuCheck, LuGripVertical, LuLayers, LuPencil, LuPlus, LuTrash, LuX } from 'react-icons/lu'
 import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
-import { renameCrmStage, reorderCrmStages } from '../api.js'
+import { createCrmStage, deleteCrmStage, renameCrmStage, reorderCrmStages } from '../api.js'
 import { hasNameConflict, sortStages } from '../utils.js'
 import InlineError from './inline-error.jsx'
 import PipelineTag from './pipeline-tag.jsx'
@@ -31,6 +31,8 @@ function StageRow({
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
+  onDeleteStage,
+  isDeleting,
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: stage.id, disabled: dragDisabled })
@@ -115,14 +117,25 @@ function StageRow({
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            onClick={onStartEdit}
-            aria-label={`Rename ${stage.name}`}
-            className="flex h-7 w-7 items-center justify-center rounded-xs text-[var(--ew-muted)] transition-colors hover:text-[#cc785c]"
-          >
-            <LuPencil className="h-3.5 w-3.5" />
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={onStartEdit}
+              aria-label={`Rename ${stage.name}`}
+              className="flex h-7 w-7 items-center justify-center rounded-xs text-[var(--ew-muted)] transition-colors hover:text-[#cc785c]"
+            >
+              <LuPencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onDeleteStage}
+              disabled={isDeleting || dragDisabled}
+              aria-label={`Delete ${stage.name}`}
+              className="flex h-7 w-7 items-center justify-center rounded-xs text-[var(--ew-muted)] transition-colors hover:text-[#cc785c] disabled:opacity-60"
+            >
+              <LuTrash className="h-3.5 w-3.5" />
+            </button>
+          </>
         )}
       </div>
     </li>
@@ -142,6 +155,9 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
   const [editDraft, setEditDraft] = useState('')
   const [isRenaming, setIsRenaming] = useState(false)
   const [isSavingOrder, setIsSavingOrder] = useState(false)
+  const [isCreatingStage, setIsCreatingStage] = useState(false)
+  const [deletingStageId, setDeletingStageId] = useState(null)
+  const [newStageName, setNewStageName] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const onCloseRef = useRef(onClose)
@@ -174,13 +190,15 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
     setOrder(sortStages(pipeline?.stages))
     setEditingId(null)
     setEditDraft('')
+    setNewStageName('')
+    setDeletingStageId(null)
     setError('')
     setNotice('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pipelineId])
 
   const closeDrawer = () => {
-    if (isRenaming || isSavingOrder) return
+    if (isRenaming || isSavingOrder || isCreatingStage || deletingStageId !== null) return
     ignorePopRef.current = true
     onCloseRef.current?.()
     if (window.history.state?.overlay) {
@@ -219,7 +237,7 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
   if (!open || !pipeline) return null
 
   const isOrderDirty = !sameOrder(order, savedStages)
-  const isBusy = isRenaming || isSavingOrder
+  const isBusy = isRenaming || isSavingOrder || isCreatingStage || deletingStageId !== null
 
   const startEdit = (stage) => {
     setEditingId(stage.id)
@@ -231,6 +249,56 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
   const cancelEdit = () => {
     setEditingId(null)
     setEditDraft('')
+  }
+
+  const addStage = async () => {
+    const name = newStageName.trim()
+    if (!name) {
+      setError('Stage name is required.')
+      return
+    }
+    if (hasNameConflict(order.map((item) => item.name), name)) {
+      setError(`A stage named "${name}" already exists in this pipeline.`)
+      return
+    }
+
+    setIsCreatingStage(true)
+    setError('')
+    setNotice('')
+    try {
+      const created = await createCrmStage(token, pipeline.id, name)
+      const next = sortStages([...order, created])
+      setOrder(next)
+      setNewStageName('')
+      onStagesChange?.(pipeline.id, next)
+      setNotice(`Added "${created.name}".`)
+    } catch (err) {
+      setError(err?.message || 'Unable to add stage.')
+    } finally {
+      setIsCreatingStage(false)
+    }
+  }
+
+  const deleteStage = async (stage) => {
+    if (order.length <= 1) {
+      setError('A pipeline must keep at least one stage.')
+      return
+    }
+
+    setDeletingStageId(stage.id)
+    setError('')
+    setNotice('')
+    try {
+      await deleteCrmStage(token, pipeline.id, stage.id)
+      const next = order.filter((item) => item.id !== stage.id)
+      setOrder(next)
+      onStagesChange?.(pipeline.id, next)
+      setNotice(`Deleted "${stage.name}".`)
+    } catch (err) {
+      setError(err?.message || 'Unable to delete stage.')
+    } finally {
+      setDeletingStageId(null)
+    }
   }
 
   const saveEdit = async () => {
@@ -255,10 +323,11 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
     setError('')
     try {
       const updated = await renameCrmStage(token, pipeline.id, stage.id, name)
-      setOrder((current) => current.map((item) => (item.id === updated.id ? { ...item, name: updated.name } : item)))
+      const next = order.map((item) => (item.id === updated.id ? { ...item, name: updated.name } : item))
+      setOrder(next)
       onStagesChange?.(
         pipeline.id,
-        savedStages.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)),
+        next.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)),
       )
       cancelEdit()
       setNotice(`Renamed to "${updated.name}".`)
@@ -349,6 +418,44 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
               Renames are saved immediately.
             </p>
 
+            <div className="rounded-xs border p-2" style={{ borderColor: 'var(--ew-line)' }}>
+              <label htmlFor="new-stage-name" className="text-xs text-[var(--ew-muted)]">
+                Add stage
+              </label>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  id="new-stage-name"
+                  type="text"
+                  value={newStageName}
+                  maxLength={MAX_STAGE_NAME}
+                  disabled={isBusy}
+                  onChange={(event) => setNewStageName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      addStage()
+                    }
+                  }}
+                  placeholder="New stage name"
+                  className="h-8 min-w-0 flex-1 rounded-xs border bg-surface px-2 text-sm text-[var(--ew-ink)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
+                  style={{ borderColor: 'var(--ew-field-line)' }}
+                />
+                <button
+                  type="button"
+                  onClick={addStage}
+                  disabled={isBusy || !newStageName.trim()}
+                  aria-label="Add stage"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-60"
+                >
+                  {isCreatingStage ? (
+                    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+                  ) : (
+                    <LuPlus className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+            </div>
+
             {order.length === 0 ? (
               <div
                 className="flex min-h-32 items-center justify-center rounded-xs border border-dashed text-sm text-[var(--ew-muted)]"
@@ -373,6 +480,8 @@ export default function ManageStageDrawer({ open, token, pipeline, onClose, onSt
                         onStartEdit={() => startEdit(stage)}
                         onCancelEdit={cancelEdit}
                         onSaveEdit={saveEdit}
+                        onDeleteStage={() => deleteStage(stage)}
+                        isDeleting={deletingStageId === stage.id}
                       />
                     ))}
                   </ol>

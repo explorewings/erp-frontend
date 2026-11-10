@@ -34,6 +34,23 @@ export async function fetchCrmUsers(token) {
   return readResponse(response, 'Unable to load users.')
 }
 
+export async function createCrmStage(token, pipelineId, name) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/stages`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ name }),
+  })
+  return readResponse(response, 'Unable to add stage.')
+}
+
+export async function deleteCrmStage(token, pipelineId, stageId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/stages/${stageId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to delete stage.')
+}
+
 export async function renameCrmStage(token, pipelineId, stageId, name) {
   const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/stages/${stageId}`, {
     method: 'PATCH',

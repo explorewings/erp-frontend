@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../authetication/auth-context.js'
 import Loader from '../../appcomponents/loader.jsx'
 import AddDeal from '../components/add-deal.jsx'
+import AssignUsersDrawer from '../components/assign-users-drawer.jsx'
 import DealDetailsDrawer from '../components/deal-details-drawer.jsx'
 import CrmSearchModal from '../components/crm-search-modal.jsx'
 import InlineError from '../components/inline-error.jsx'
@@ -57,7 +58,7 @@ const ACTIONS = [
     id: 'assign-users',
     scope: 'pipeline',
     title: 'Assign users',
-    description: 'Assign users to deals in the current pipeline.',
+    description: 'Manage pipeline access and choose a deal assignment method.',
     Icon: LuUsers,
   },
   {
@@ -132,6 +133,7 @@ export default function Crm() {
   const [searchQuery, setSearchQuery] = useState('')
   const [pipelineDrawerTab, setPipelineDrawerTab] = useState(null)
   const [isStageDrawerOpen, setIsStageDrawerOpen] = useState(false)
+  const [isAssignUsersDrawerOpen, setIsAssignUsersDrawerOpen] = useState(false)
   const [isAddDealOpen, setIsAddDealOpen] = useState(false)
   const [detailsDeal, setDetailsDeal] = useState(null)
   const boardScrollerRef = useRef(null)
@@ -172,6 +174,7 @@ export default function Crm() {
   const actionHandlers = {
     'manage-pipelines': () => setPipelineDrawerTab('manage'),
     'manage-stages': () => setIsStageDrawerOpen(true),
+    'assign-users': () => setIsAssignUsersDrawerOpen(true),
   }
 
   const handlePipelineDeleted = (pipelineId) => {
@@ -353,6 +356,12 @@ export default function Crm() {
           pipeline={selectedPipeline}
           onClose={() => setIsStageDrawerOpen(false)}
           onStagesChange={(pipelineId, nextStages) => updatePipeline(pipelineId, { stages: nextStages })}
+        />
+        <AssignUsersDrawer
+          open={isAssignUsersDrawerOpen && Boolean(selectedPipeline)}
+          token={token}
+          pipeline={selectedPipeline}
+          onClose={() => setIsAssignUsersDrawerOpen(false)}
         />
         <ManagePipelineDrawer
           open={pipelineDrawerTab !== null}

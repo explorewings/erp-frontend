@@ -10,8 +10,9 @@ function headers(token) {
   return { Authorization: `Bearer ${token}` }
 }
 
-export async function fetchReports(token, page = 1) {
+export async function fetchReports(token, page = 1, date = null) {
   const query = new URLSearchParams({ page: String(page), limit: '100' })
+  if (date) query.set('date', date)
   const response = await fetch(`${API_BASE_URL}/reports?${query}`, { headers: headers(token) })
   return readResponse(response, 'Unable to load reports.')
 }

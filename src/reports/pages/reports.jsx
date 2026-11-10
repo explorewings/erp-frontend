@@ -3,6 +3,7 @@ import { LuFileText, LuLink2, LuPlus } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
 import Loader from '../../appcomponents/loader.jsx'
 import { createReport, fetchReports, updateReport } from '../api.js'
+import ReportDateFilter from '../components/report-date-filter.jsx'
 import ReportDrawer from '../components/report-drawer.jsx'
 import ReportViewDrawer from '../components/report-view-drawer.jsx'
 
@@ -76,6 +77,7 @@ export default function Reports() {
   const [reloadTick, setReloadTick] = useState(0)
   const [formReport, setFormReport] = useState(undefined)
   const [viewReport, setViewReport] = useState(null)
+  const [selectedDate, setSelectedDate] = useState(null)
   const isElevated = user?.role === 'superadmin' || user?.role === 'superuser'
   const canSubmit = useMemo(
     () => ['staff', 'admin', 'superadmin', 'superuser'].includes(user?.role ?? ''),
@@ -86,7 +88,7 @@ export default function Reports() {
     let cancelled = false
     setIsLoading(true)
     setError('')
-    fetchReports(token, page)
+    fetchReports(token, page, selectedDate)
       .then((result) => {
         if (cancelled) return
         setReports(Array.isArray(result?.items) ? result.items : [])
@@ -102,7 +104,7 @@ export default function Reports() {
     return () => {
       cancelled = true
     }
-  }, [token, page, reloadTick])
+  }, [token, page, selectedDate, reloadTick])
 
   const saveReport = async (id, formData) => {
     const saved = id ? await updateReport(token, id, formData) : await createReport(token, formData)
@@ -110,6 +112,7 @@ export default function Reports() {
       setReports((current) => current.map((item) => item.id === id ? saved : item))
     } else {
       setPage(1)
+      setSelectedDate(null)
     }
     setFormReport(undefined)
     setError('')
@@ -125,10 +128,24 @@ export default function Reports() {
   return (
     <section className="mx-auto w-full max-w-5xl space-y-6">
       {formReport === undefined && canSubmit ? (
-        <div className="flex justify-end">
-          <button type="button" onClick={() => setFormReport(null)} className="inline-flex items-center gap-2 rounded-xs bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-strong">
+        <div className="flex items-center justify-end gap-2">
+          <ReportDateFilter
+            value={selectedDate}
+            disabled={isLoading}
+            onChange={(next) => {
+              setSelectedDate(next)
+              setPage(1)
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setFormReport(null)}
+            aria-label="New report"
+            title="New report"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xs bg-accent text-sm font-medium text-white hover:bg-accent-strong sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2.5"
+          >
             <LuPlus className="h-4 w-4" />
-            New report
+            <span className="sr-only sm:not-sr-only">New report</span>
           </button>
         </div>
       ) : null}
@@ -204,8 +221,23 @@ export default function Reports() {
       ) : error ? null : (
         <div className="flex min-h-[70vh] flex-col items-center justify-center rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center">
           <LuFileText className="mx-auto h-8 w-8 text-muted" />
-          <h2 className="mt-3 text-title font-semibold text-ink">No reports yet</h2>
-          <p className="mt-1 text-sm text-muted">Submitted reports will appear here.</p>
+          <h2 className="mt-3 text-title font-semibold text-ink">
+            {selectedDate ? 'No reports for this date' : 'No reports yet'}
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            {selectedDate
+              ? `${isElevated ? 'No one submitted' : 'You have not submitted'} a report on ${formatDate(selectedDate)}.`
+              : 'Submitted reports will appear here.'}
+          </p>
+          {selectedDate ? (
+            <button
+              type="button"
+              onClick={() => { setSelectedDate(null); setPage(1) }}
+              className="mt-4 rounded-xs border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-ground"
+            >
+              Clear date filter
+            </button>
+          ) : null}
         </div>
       )}
 

@@ -181,15 +181,38 @@ function ReportForm({ report, onClose, onSaved }) {
               </label>
             ) : null}
             {attachmentMode === 'file' ? (
-              <input
-                id="report-attachment-file"
-                aria-label="Report attachment file"
-                type="file"
-                accept={FILE_ACCEPT}
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                disabled={busy}
-                className="block h-10 w-full rounded-xs border border-field bg-surface px-3 py-1.5 text-body-sm text-muted outline-none transition-colors file:mr-3 file:h-7 file:rounded-xs file:border-0 file:bg-ground file:px-3 file:text-meta file:font-medium file:text-ink focus:border-accent focus:ring-4 focus:ring-accent/15 disabled:opacity-60"
-              />
+              <label
+                htmlFor="report-attachment-file"
+                className={`group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xs border-2 border-dashed px-4 py-8 text-center transition-colors ${busy ? 'pointer-events-none opacity-60' : ''} ${
+                  file
+                    ? 'border-accent/60 bg-accent/5'
+                    : 'border-field bg-surface hover:border-accent/50 hover:bg-accent/5'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+                    file ? 'bg-accent/15 text-accent-strong' : 'bg-ground text-muted group-hover:text-accent-strong'
+                  }`}
+                >
+                  {file ? <LuFileText className="h-6 w-6" /> : <LuUpload className="h-6 w-6" />}
+                </span>
+                <span className="block min-w-0 max-w-full break-all text-body-sm font-medium text-ink">
+                  {file ? file.name : 'Click to upload a file'}
+                </span>
+                <span className="block text-meta text-muted">
+                  {file ? 'Click to choose a different file' : 'PDF, Word, Excel, CSV, TXT or image'}
+                </span>
+                <input
+                  id="report-attachment-file"
+                  aria-label="Report attachment file"
+                  type="file"
+                  accept={FILE_ACCEPT}
+                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                  disabled={busy}
+                  className="sr-only"
+                />
+              </label>
             ) : null}
             {attachmentMode === 'keep' && report?.attachment ? (
               <p className="break-all rounded-xs border border-line bg-ground px-3 py-2 text-meta text-muted">
