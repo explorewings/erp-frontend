@@ -34,6 +34,11 @@ export async function fetchCrmUsers(token) {
   return readResponse(response, 'Unable to load users.')
 }
 
+export async function fetchCrmEligibleUsers(token) {
+  const response = await fetch(`${API_BASE_URL}/crm/users/eligible`, { headers: authHeaders(token) })
+  return readResponse(response, 'Unable to load users with CRM access.')
+}
+
 export async function createCrmStage(token, pipelineId, name) {
   const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/stages`, {
     method: 'POST',
@@ -100,6 +105,13 @@ export async function fetchCrmDeals(token, pipelineId) {
   return readResponse(response, 'Unable to load deals.')
 }
 
+export async function fetchCrmAssignees(token, pipelineId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/assignees`, {
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to load eligible users.')
+}
+
 /** Creates a new client and adds it to the pipeline's first stage as a deal. */
 export async function createCrmDeal(token, pipelineId, client) {
   const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/deals`, {
@@ -126,4 +138,21 @@ export async function moveCrmDeal(token, dealId, stageId) {
     body: JSON.stringify({ stageId }),
   })
   return readResponse(response, 'Unable to move deal.')
+}
+
+export async function assignCrmDeal(token, dealId, assignedUserId) {
+  const response = await fetch(`${API_BASE_URL}/crm/deals/${dealId}/assignment`, {
+    method: 'PATCH',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ assignedUserId }),
+  })
+  return readResponse(response, 'Unable to assign deal.')
+}
+
+export async function deleteCrmDeal(token, dealId) {
+  const response = await fetch(`${API_BASE_URL}/crm/deals/${dealId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to delete deal.')
 }

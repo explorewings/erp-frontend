@@ -1,13 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  closestCenter,
   defaultDropAnimationSideEffects,
   pointerWithin,
-  rectIntersection,
   useDroppable,
   useSensor,
   useSensors,
@@ -21,6 +21,7 @@ const DROP_ANIMATION = {
   easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
   sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0' } } }),
 }
+const EMPTY_DEALS = []
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
@@ -58,7 +59,7 @@ const columnKeyboardCoordinates = (event, { context }) => {
 }
 
 /** A column's deal list. It looks the same whether or not a drag is in progress. */
-function StageDeals({ deals, onDealMove, onViewDeal }) {
+const StageDeals = memo(function StageDeals({ deals, onDealMove, onViewDeal }) {
   return (
     <div
       className="min-h-0 flex-1 space-y-2 overflow-y-auto border p-2.5"
@@ -85,9 +86,9 @@ function StageDeals({ deals, onDealMove, onViewDeal }) {
       )}
     </div>
   )
-}
+})
 
-function StageColumn({ stage, index, deals, onDealMove, onViewDeal }) {
+const StageColumn = memo(function StageColumn({ stage, index, deals, onDealMove, onViewDeal }) {
   const { setNodeRef } = useDroppable({ id: stageDndId(stage.id), disabled: !onDealMove })
 
   return (
@@ -122,7 +123,7 @@ function StageColumn({ stage, index, deals, onDealMove, onViewDeal }) {
 </div>
     </section>
   )
-}
+})
 
 export default function KanbanBoard({
   scrollerRef,
@@ -135,25 +136,43 @@ export default function KanbanBoard({
 }) {
   const [activeDeal, setActiveDeal] = useState(null)
   const [overStageId, setOverStageId] = useState(null)
+  const boardRectRef = useRef(null)
 
-  // Pointer over a column wins. In the gap between two columns, keep the
-  // current target instead of re-deciding by overlap, which flickered.
-  const lastOverRef = useRef(null)
+  const stageDeals = useMemo(() => {
+    const grouped = new Map(stages.map((stage) => [String(stage.id), []]))
+    for (const deal of deals) {
+      grouped.get(String(deal.stageId))?.push(deal)
+    }
+    return grouped
+  }, [deals, stages])
+
+  // Pointer over a column wins; gaps between columns resolve to the nearest
+  // column instead of retaining a stale drop target.
   const stageCollision = useCallback((args) => {
-    if (!args.pointerCoordinates) return rectIntersection(args) // keyboard drag
+    if (!args.pointerCoordinates) return closestCenter(args) // keyboard drag
     const hits = pointerWithin(args)
-    if (hits.length > 0) {
-      lastOverRef.current = hits[0].id
-      return hits
+    if (hits.length > 0) return hits
+    const boardRect = boardRectRef.current
+    const { x, y } = args.pointerCoordinates
+    if (!boardRect || x < boardRect.left || x > boardRect.right || y < boardRect.top || y > boardRect.bottom) return []
+    let nearestId = null
+    let nearestDistance = Infinity
+    for (const container of args.droppableContainers) {
+      if (container.disabled) continue
+      const rect = args.droppableRects.get(container.id)
+      if (!rect) continue
+      const centerX = rect.left + rect.width / 2
+      const centerY = rect.top + rect.height / 2
+      const distance = (x - centerX) ** 2 + (y - centerY) ** 2
+      if (distance < nearestDistance) {
+        nearestId = container.id
+        nearestDistance = distance
+      }
     }
-    const last = lastOverRef.current
-    if (last !== null && args.droppableContainers.some((container) => container.id === last)) {
-      return [{ id: last }]
-    }
-    return rectIntersection(args)
-  }, [])
+    return nearestId === null ? [] : [{ id: nearestId }]
+  }, [scrollerRef])
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: columnKeyboardCoordinates }),
   )
 
@@ -223,7 +242,7 @@ export default function KanbanBoard({
   }
 
   const resetDrag = () => {
-    lastOverRef.current = null
+    boardRectRef.current = null
     setActiveDeal(null)
     setOverStageId(null)
   }
@@ -249,6 +268,7 @@ export default function KanbanBoard({
       collisionDetection={stageCollision}
       accessibility={accessibility}
       onDragStart={({ active }) => {
+        boardRectRef.current = scrollerRef.current?.getBoundingClientRect() ?? null
         setActiveDeal(active.data.current?.deal ?? null)
       }}
       onDragOver={({ over }) => setOverStageId(over ? String(over.id) : null)}
@@ -266,13 +286,12 @@ export default function KanbanBoard({
       >
         <div className="flex h-full min-w-max items-stretch gap-5 p-4">
           {stages.map((stage, index) => {
-            const stageDeals = deals.filter((deal) => String(deal.stageId) === String(stage.id))
             return (
               <StageColumn
                 key={stage.id}
                 stage={stage}
                 index={index}
-                deals={stageDeals}
+                deals={stageDeals.get(String(stage.id)) || EMPTY_DEALS}
                 onDealMove={onDealMove}
                 onViewDeal={onViewDeal}
               />

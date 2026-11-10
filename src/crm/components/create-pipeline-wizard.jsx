@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { LuCheck, LuPencil, LuTrash2 } from 'react-icons/lu'
-import { createCrmPipeline, fetchCrmUsers } from '../api.js'
+import { createCrmPipeline, fetchCrmEligibleUsers } from '../api.js'
 import { hasNameConflict, isSuperRole } from '../utils.js'
 import InlineError from './inline-error.jsx'
 
@@ -222,7 +222,15 @@ function StageEditor({ stages, onChange, onError }) {
 }
 
 /** Step 3: choose who else can see the pipeline. */
-function AllowedUsersPicker({ users, currentUserId, selectedIds, onChange }) {
+function AllowedUsersPicker({
+  users,
+  currentUserId,
+  selectedIds,
+  onChange,
+  isLoading,
+  error,
+  onRetry,
+}) {
   return (
     <div className="space-y-3 rounded-control border p-4" style={{ borderColor: 'var(--ew-line)' }}>
       <div>
@@ -231,9 +239,23 @@ function AllowedUsersPicker({ users, currentUserId, selectedIds, onChange }) {
           Superadmins always retain access. Pipeline creator is included automatically.
         </p>
         <div className="mt-2 max-h-40 space-y-1 overflow-y-auto pr-1">
-          {users
-            .filter((candidate) => candidate.status !== 'inactive')
-            .map((candidate) => {
+          {isLoading ? (
+            <p role="status" className="py-4 text-center text-sm text-[var(--ew-muted)]">
+              Checking CRM access...
+            </p>
+          ) : error ? (
+            <div className="py-3 text-center" role="alert">
+              <p className="text-sm text-danger">{error}</p>
+              <button type="button" onClick={onRetry} className="mt-2 text-xs font-medium underline">
+                Retry
+              </button>
+            </div>
+          ) : users.length === 0 ? (
+            <p className="py-4 text-center text-sm text-[var(--ew-muted)]">
+              No active users have CRM menu access.
+            </p>
+          ) : (
+            users.map((candidate) => {
               const isSuper = isSuperRole(candidate.role)
               const isCreator = candidate.id === currentUserId
               return (
@@ -255,7 +277,8 @@ function AllowedUsersPicker({ users, currentUserId, selectedIds, onChange }) {
                   </span>
                 </label>
               )
-            })}
+            })
+          )}
         </div>
       </div>
     </div>
@@ -271,24 +294,38 @@ export default function CreatePipelineWizard({ token, user, step, onStepChange, 
   const [template, setTemplate] = useState(TEMPLATES[0].key)
   const [templateStages, setTemplateStages] = useState(defaultTemplateStages)
   const [users, setUsers] = useState([])
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false)
+  const [usersError, setUsersError] = useState('')
+  const [usersReloadTick, setUsersReloadTick] = useState(0)
   const [allowedUserIds, setAllowedUserIds] = useState([])
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!token) return undefined
+    if (step !== LAST_STEP || !token) return undefined
     let cancelled = false
-    fetchCrmUsers(token)
+    setUsers([])
+    setIsLoadingUsers(true)
+    setUsersError('')
+    fetchCrmEligibleUsers(token)
       .then((list) => {
-        if (!cancelled) setUsers(Array.isArray(list) ? list : [])
+        if (!cancelled) {
+          const eligibleUsers = Array.isArray(list) ? list : []
+          const eligibleIds = new Set(eligibleUsers.map((candidate) => candidate.id))
+          setUsers(eligibleUsers)
+          setAllowedUserIds((current) => current.filter((id) => eligibleIds.has(id)))
+        }
       })
-      .catch(() => {
-        if (!cancelled) setUsers([])
+      .catch((err) => {
+        if (!cancelled) setUsersError(err?.message || 'Unable to verify CRM menu access.')
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingUsers(false)
       })
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [step, token, usersReloadTick])
 
   const stages = templateStages[template] || []
   const canAdvance = step === 1 ? Boolean(name.trim()) : stages.length > 0
@@ -311,6 +348,10 @@ export default function CreatePipelineWizard({ token, user, step, onStepChange, 
     if (stages.length === 0) {
       setError('Add at least one stage.')
       onStepChange(2)
+      return
+    }
+    if (isLoadingUsers || usersError) {
+      setError('Verify CRM menu access before creating the pipeline.')
       return
     }
     setIsCreating(true)
@@ -358,6 +399,9 @@ export default function CreatePipelineWizard({ token, user, step, onStepChange, 
           currentUserId={user?.id}
           selectedIds={allowedUserIds}
           onChange={setAllowedUserIds}
+          isLoading={isLoadingUsers}
+          error={usersError}
+          onRetry={() => setUsersReloadTick((tick) => tick + 1)}
         />
       )}
 
@@ -379,7 +423,7 @@ export default function CreatePipelineWizard({ token, user, step, onStepChange, 
           <button
             key="create"
             type="submit"
-            disabled={isCreating || !name.trim()}
+            disabled={isCreating || isLoadingUsers || Boolean(usersError) || !name.trim()}
             className="h-9 rounded-xs bg-[#cc785c] px-4 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-60"
           >
             {isCreating ? 'Creating...' : 'Create pipeline'}

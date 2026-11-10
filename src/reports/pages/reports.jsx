@@ -2,12 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 import { LuFileText, LuLink2, LuPlus } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
 import Loader from '../../appcomponents/loader.jsx'
-import { createReport, fetchReports, updateReport } from '../api.js'
+import Toast from '../../appcomponents/toast.jsx'
+import { createReport, deleteReport, fetchReports, updateReport } from '../api.js'
 import ReportDateFilter from '../components/report-date-filter.jsx'
 import ReportDrawer from '../components/report-drawer.jsx'
+import ReportUserFilter from '../components/report-user-filter.jsx'
 import ReportViewDrawer from '../components/report-view-drawer.jsx'
 
 const EDIT_WINDOW_MS = 15 * 60 * 1000
+
+function todayIso() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
 
 function formatDate(value) {
   return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
@@ -78,6 +85,9 @@ export default function Reports() {
   const [formReport, setFormReport] = useState(undefined)
   const [viewReport, setViewReport] = useState(null)
   const [selectedDate, setSelectedDate] = useState(null)
+  const [toast, setToast] = useState(null)
+  const [submittedToday, setSubmittedToday] = useState(false)
+  const [selectedUser, setSelectedUser] = useState(null)
   const isElevated = user?.role === 'superadmin' || user?.role === 'superuser'
   const canSubmit = useMemo(
     () => ['staff', 'admin', 'superadmin', 'superuser'].includes(user?.role ?? ''),
@@ -88,7 +98,7 @@ export default function Reports() {
     let cancelled = false
     setIsLoading(true)
     setError('')
-    fetchReports(token, page, selectedDate)
+    fetchReports(token, page, selectedDate, selectedUser)
       .then((result) => {
         if (cancelled) return
         setReports(Array.isArray(result?.items) ? result.items : [])
@@ -104,7 +114,7 @@ export default function Reports() {
     return () => {
       cancelled = true
     }
-  }, [token, page, selectedDate, reloadTick])
+  }, [token, page, selectedDate, selectedUser, reloadTick])
 
   const saveReport = async (id, formData) => {
     const saved = id ? await updateReport(token, id, formData) : await createReport(token, formData)
@@ -113,6 +123,7 @@ export default function Reports() {
     } else {
       setPage(1)
       setSelectedDate(null)
+      setSelectedUser(null)
     }
     setFormReport(undefined)
     setError('')
@@ -120,15 +131,63 @@ export default function Reports() {
     setReloadTick((tick) => tick + 1)
   }
 
+  const openNewReport = () => {
+    if (submittedToday) {
+      setToast({
+        type: 'error',
+        message: 'You already submitted a report for today.',
+      })
+      return
+    }
+    setFormReport(null)
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    if (!token) return undefined
+    // Check today's report independently of the active date filter/pagination,
+    // so the New report button is gated reliably.
+    fetchReports(token, 1, todayIso())
+      .then((result) => {
+        if (cancelled) return
+        const items = Array.isArray(result?.items) ? result.items : []
+        setSubmittedToday(items.some((item) => item.createdBy === user?.id))
+      })
+      .catch(() => {
+        if (!cancelled) setSubmittedToday(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token, user?.id, reloadTick])
+
   const saveRemarks = (updated) => {
     setReports((current) => current.map((item) => item.id === updated.id ? updated : item))
     setViewReport(updated)
+  }
+
+  const removeReport = async (id) => {
+    await deleteReport(token, id)
+    setViewReport(null)
+    setWarning('')
+    setReloadTick((tick) => tick + 1)
   }
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-6">
       {formReport === undefined && canSubmit ? (
         <div className="flex items-center justify-end gap-2">
+          {isElevated ? (
+            <ReportUserFilter
+              value={selectedUser}
+              token={token}
+              disabled={isLoading}
+              onChange={(next) => {
+                setSelectedUser(next)
+                setPage(1)
+              }}
+            />
+          ) : null}
           <ReportDateFilter
             value={selectedDate}
             disabled={isLoading}
@@ -139,7 +198,7 @@ export default function Reports() {
           />
           <button
             type="button"
-            onClick={() => setFormReport(null)}
+            onClick={openNewReport}
             aria-label="New report"
             title="New report"
             className="inline-flex h-10 w-10 items-center justify-center rounded-xs bg-accent text-sm font-medium text-white hover:bg-accent-strong sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2.5"
@@ -176,6 +235,7 @@ export default function Reports() {
           setFormReport(report)
         }}
         onRemarksSaved={saveRemarks}
+        onDelete={removeReport}
       />
 
       {isLoading ? (
@@ -222,24 +282,34 @@ export default function Reports() {
         <div className="flex min-h-[70vh] flex-col items-center justify-center rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center">
           <LuFileText className="mx-auto h-8 w-8 text-muted" />
           <h2 className="mt-3 text-title font-semibold text-ink">
-            {selectedDate ? 'No reports for this date' : 'No reports yet'}
+            {selectedDate || selectedUser ? 'No matching reports' : 'No reports yet'}
           </h2>
           <p className="mt-1 text-sm text-muted">
             {selectedDate
               ? `${isElevated ? 'No one submitted' : 'You have not submitted'} a report on ${formatDate(selectedDate)}.`
-              : 'Submitted reports will appear here.'}
+              : selectedUser
+                ? 'This person has not submitted any reports yet.'
+                : 'Submitted reports will appear here.'}
           </p>
-          {selectedDate ? (
+          {selectedDate || selectedUser ? (
             <button
               type="button"
-              onClick={() => { setSelectedDate(null); setPage(1) }}
+              onClick={() => { setSelectedDate(null); setSelectedUser(null); setPage(1) }}
               className="mt-4 rounded-xs border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-ground"
             >
-              Clear date filter
+              Clear filters
             </button>
           ) : null}
         </div>
       )}
+
+      <Toast
+        open={Boolean(toast)}
+        message={toast?.message}
+        type={toast?.type}
+        onClose={() => setToast(null)}
+        centerWithinMain
+      />
 
     </section>
   )

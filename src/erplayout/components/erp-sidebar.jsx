@@ -34,7 +34,9 @@ function BrandLockup({ collapsed }) {
 
 export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse }) {
   const signOut = useSignOut()
-  const { canAccess, menuAccessLoading } = useAuth()
+  const { canAccess, menuAccessLoading, user } = useAuth()
+  const isSuperuser = user?.role === 'superadmin' || user?.role === 'superuser'
+  const showMenuLoader = menuAccessLoading && !isSuperuser
   const [confirmSignOut, setConfirmSignOut] = useState(false)
   const handleSignOut = () => setConfirmSignOut(true)
   const confirmSignOutNow = () => {
@@ -77,7 +79,7 @@ export default function ErpSidebar({ open, onClose, collapsed, onToggleCollapse 
           </p>
 
           <ul className="divide-y divide-line overflow-hidden rounded-xs border border-line">
-            {menuAccessLoading ? (
+            {showMenuLoader ? (
               <li className="px-3 py-3 text-sm text-muted" role="status">Loading menus...</li>
             ) : NAV_ITEMS.filter((item) => canAccess(item.key)).map(({ label, to, Icon }) => (
               <li key={to}>

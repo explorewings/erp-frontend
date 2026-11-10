@@ -59,6 +59,15 @@ export default function useCrmDeals(token, pipelineId) {
     setDeals((current) => [deal, ...current.filter((item) => item.id !== deal.id)])
   }, [])
 
+  const updateDeal = useCallback((deal) => {
+    if (deal.pipelineId !== pipelineRef.current) return
+    setDeals((current) => current.map((item) => (item.id === deal.id ? deal : item)))
+  }, [])
+
+  const removeDeal = useCallback((dealId) => {
+    setDeals((current) => current.filter((item) => item.id !== dealId))
+  }, [])
+
   const moveDeal = useCallback(
     async (dealId, stageId) => {
       const deal = dealsRef.current.find((item) => item.id === dealId)
@@ -100,6 +109,8 @@ export default function useCrmDeals(token, pipelineId) {
     clearMoveError: () => setMoveError(''),
     reload,
     addDeal,
+    updateDeal,
+    removeDeal,
     moveDeal,
   }
 }

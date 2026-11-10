@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { loginRequest } from './api.js'
 import { AuthContext } from './auth-context.js'
 import { fetchMyAccess } from '../settings/api.js'
@@ -24,6 +24,29 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem(STORAGE_KEY)
   }, [session])
 
+  const refreshMenuAccess = useCallback(async () => {
+    const token = session?.token
+    if (!token) return
+    setMenuAccessLoading(true)
+    try {
+      const access = await fetchMyAccess(token)
+      setSession((current) => (
+        current?.token === token
+          ? {
+              ...current,
+              user: { ...current.user, role: access.role },
+              grantedMenus: access.grantedMenus,
+            }
+          : current
+      ))
+      setAccessRefreshError('')
+    } catch (error) {
+      setAccessRefreshError(error?.message || 'Unable to refresh menu access.')
+    } finally {
+      setMenuAccessLoading(false)
+    }
+  }, [session?.token])
+
   useEffect(() => {
     const token = session?.token
     if (!token) {
@@ -33,7 +56,7 @@ export function AuthProvider({ children }) {
     }
 
     let cancelled = false
-    const refreshMenuAccess = async (initial = false) => {
+    const load = async () => {
       try {
         const access = await fetchMyAccess(token)
         if (cancelled) return
@@ -49,19 +72,18 @@ export function AuthProvider({ children }) {
         setAccessRefreshError('')
       } catch (error) {
         if (!cancelled) {
-          setSession((current) => (
-            current?.token === token ? { ...current, grantedMenus: [] } : current
-          ))
           setAccessRefreshError(error?.message || 'Unable to refresh menu access.')
         }
       } finally {
-        if (initial && !cancelled) setMenuAccessLoading(false)
+        if (!cancelled) setMenuAccessLoading(false)
       }
     }
 
-    setMenuAccessLoading(true)
-    void refreshMenuAccess(true)
-    const refreshOnFocus = () => void refreshMenuAccess()
+    // Only block the UI on the first load; later refreshes keep the current
+    // grants so users are not bounced to the no-access screen.
+    if (!Array.isArray(session?.grantedMenus)) setMenuAccessLoading(true)
+    void load()
+    const refreshOnFocus = () => void load()
     const refreshInterval = window.setInterval(refreshOnFocus, 60_000)
     window.addEventListener('focus', refreshOnFocus)
     return () => {
@@ -69,14 +91,16 @@ export function AuthProvider({ children }) {
       window.clearInterval(refreshInterval)
       window.removeEventListener('focus', refreshOnFocus)
     }
-  }, [session?.token, session?.user?.role])
+  }, [session?.token])
 
   const grantedMenus = Array.isArray(session?.grantedMenus) ? session.grantedMenus : []
   const isSuperuser = session?.user?.role === 'superadmin' || session?.user?.role === 'superuser'
   const canAccess = (key) => {
-    if (accessRefreshError || menuAccessLoading) return false
-    if (key === 'menu:settings') return isSuperuser
-    return isSuperuser || grantedMenus.includes(key)
+    // Superadmins always have every menu, even before access resolves.
+    if (isSuperuser) return true
+    // Only block on the very first load, when grants have never resolved.
+    if (menuAccessLoading && !Array.isArray(session?.grantedMenus)) return false
+    return grantedMenus.includes(key)
   }
 
   const value = useMemo(
@@ -88,6 +112,7 @@ export function AuthProvider({ children }) {
       menuAccessLoading,
       isAuthenticated: Boolean(session?.token),
       canAccess,
+      refreshMenuAccess,
       login: async (credentials) => {
         const data = await loginRequest(credentials)
         setMenuAccessLoading(true)
@@ -99,7 +124,7 @@ export function AuthProvider({ children }) {
         setSession(null)
       },
     }),
-    [session, grantedMenus, accessRefreshError, menuAccessLoading],
+    [session, grantedMenus, accessRefreshError, menuAccessLoading, refreshMenuAccess],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

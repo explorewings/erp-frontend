@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuArrowLeftRight, LuCircleUserRound, LuUsers, LuX } from 'react-icons/lu'
 import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
+import Tooltip from '../../appcomponents/tooltip.jsx'
 import { fetchCrmUsers } from '../api.js'
 import InlineError from './inline-error.jsx'
 import PipelineTag from './pipeline-tag.jsx'
 import SlidingTabs from './sliding-tabs.jsx'
+import { isSuperRole } from '../utils.js'
 
 const TABS = [
   { id: 'pipeline-access', label: 'Pipeline access' },
@@ -134,11 +136,11 @@ function AssignUsersDrawerContent({ token, pipeline, onClose }) {
             <div className="flex min-w-0 items-center gap-2">
               <LuUsers className="h-4 w-4 shrink-0 text-[var(--ew-ink)]" aria-hidden="true" />
               <div className="min-w-0">
-                <h2 id="assign-users-title" className="text-sm font-semibold text-[var(--ew-ink)]">
+                <h2 id="assign-users-title" className="inline text-sm font-semibold text-[var(--ew-ink)]">
                   Assign users
                 </h2>
-                <PipelineTag name={pipeline.name} />
               </div>
+              <PipelineTag name={pipeline.name} />
             </div>
             <button
               type="button"
@@ -195,21 +197,31 @@ function AssignUsersDrawerContent({ token, pipeline, onClose }) {
               ) : (
                 <ul className="space-y-2">
                   {assignedUsers.map(({ id, user }) => (
-                    <li
-                      key={id}
-                      className="flex items-center justify-between gap-3 rounded-xs border px-3 py-2"
-                      style={{ borderColor: 'var(--ew-line)' }}
-                    >
-                      <span className="min-w-0 truncate text-sm text-[var(--ew-ink)]">
-                        {user?.username || 'User unavailable'}
-                        {user?.id === pipeline.createdBy ? (
-                          <span className="ml-2 text-xs text-[var(--ew-muted)]">Pipeline creator</span>
-                        ) : null}
-                      </span>
-                      <span className="shrink-0 text-xs capitalize text-[var(--ew-muted)]">
-                        {user ? user.role : 'Unavailable'}
-                        {user?.status === 'inactive' ? ' · Inactive' : ''}
-                      </span>
+                    <li key={id}>
+                      <Tooltip
+                        content={isSuperRole(user?.role) ? 'Superadmin has full access' : null}
+                        className="block w-full"
+                      >
+                        <div
+                        aria-disabled={isSuperRole(user?.role) || undefined}
+                        tabIndex={isSuperRole(user?.role) ? 0 : undefined}
+                        className={`flex items-center justify-between gap-3 rounded-xs border px-3 py-2 ${
+                          isSuperRole(user?.role) ? 'pointer-events-none opacity-60' : ''
+                        }`}
+                        style={{ borderColor: 'var(--ew-line)' }}
+                        >
+                          <span className="min-w-0 truncate text-sm text-[var(--ew-ink)]">
+                            {user?.username || 'User unavailable'}
+                            {user?.id === pipeline.createdBy ? (
+                              <span className="ml-2 text-xs text-[var(--ew-muted)]">Pipeline creator</span>
+                            ) : null}
+                          </span>
+                          <span className="shrink-0 text-xs capitalize text-[var(--ew-muted)]">
+                            {user ? user.role : 'Unavailable'}
+                            {user?.status === 'inactive' ? ' · Inactive' : ''}
+                          </span>
+                        </div>
+                      </Tooltip>
                     </li>
                   ))}
                 </ul>

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { LuGripVertical, LuMail, LuPhone } from 'react-icons/lu'
 import { MdKeyboardDoubleArrowRight } from 'react-icons/md'
@@ -15,7 +16,7 @@ function formatAdded(value) {
 }
 
 /** Visual body of a deal card, shared by the board card and the drag overlay. */
-function DealCardBody({ deal, showGrip = true, onView }) {
+const DealCardBody = memo(function DealCardBody({ deal, showGrip = true, onView }) {
   const { client } = deal
   return (
     <>
@@ -73,7 +74,7 @@ function DealCardBody({ deal, showGrip = true, onView }) {
       </div>
     </>
   )
-}
+})
 
 const cardSurface =
   'relative rounded-[10px] border bg-[var(--ew-surface)] px-3 py-2.5'
@@ -82,7 +83,7 @@ const cardSurface =
  * A deal on the board. While it is being dragged, the card stays in its column
  * as a dashed slot and the moving copy is rendered by <DealCardOverlay>.
  */
-export default function CrmCard({ deal, draggable = false, onView }) {
+function CrmCard({ deal, draggable = false, onView }) {
   const client = deal?.client
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: dealDndId(deal?.id),
@@ -123,13 +124,15 @@ export default function CrmCard({ deal, draggable = false, onView }) {
   )
 }
 
+export default memo(CrmCard)
+
 /** The card as it follows the pointer: lifted, with a deeper shadow. */
 export function DealCardOverlay({ deal }) {
   if (!deal?.client) return null
   return (
     <article
       aria-hidden="true"
-      className={`crm-card-lift ${cardSurface} cursor-grabbing border-[var(--ew-accent)] shadow-[0_2px_4px_rgba(27,26,24,0.08),0_18px_36px_-12px_rgba(27,26,24,0.32)]`}
+      className={`${cardSurface} cursor-grabbing border-[var(--ew-accent)] shadow-[0_2px_6px_rgba(27,26,24,0.16),0_8px_18px_-8px_rgba(27,26,24,0.2)]`}
     >
       <DealCardBody deal={deal} showGrip={false} />
     </article>

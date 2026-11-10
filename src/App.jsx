@@ -27,27 +27,46 @@ function RequireSuperadmin({ children }) {
 }
 
 function RequireMenuAccess({ menuKey, children }) {
-  const { canAccess, menuAccessLoading } = useAuth()
-  if (menuAccessLoading) return null
+  const { canAccess, menuAccessLoading, user } = useAuth()
+  const isSuperuser = user?.role === 'superadmin' || user?.role === 'superuser'
+  if (menuAccessLoading && !isSuperuser) return null
   if (canAccess(menuKey)) return children
   const fallback = NAV_ITEMS.find((item) => item.key !== menuKey && canAccess(item.key))
   return <Navigate to={fallback?.to ?? '/erp/no-access'} replace />
 }
 
 function HomeRoute() {
-  const { canAccess, menuAccessLoading } = useAuth()
-  if (menuAccessLoading) return null
-  const firstAllowed = NAV_ITEMS.find((item) => canAccess(item.key))
-  return <Navigate to={firstAllowed?.to ?? '/erp/no-access'} replace />
+  const { canAccess, menuAccessLoading, user } = useAuth()
+  const isSuperuser = user?.role === 'superadmin' || user?.role === 'superuser'
+  if (menuAccessLoading && !isSuperuser) return null
+  // Prefer the calendar, then fall back to the first allowed menu in nav order.
+  const allowed = NAV_ITEMS.filter((item) => canAccess(item.key))
+  const target = allowed.find((item) => item.key === 'menu:calendar') ?? allowed[0]
+  return <Navigate to={target?.to ?? '/erp/no-access'} replace />
 }
 
 function NoMenuAccess() {
+  const { accessRefreshError, menuAccessLoading, refreshMenuAccess } = useAuth()
+  if (menuAccessLoading) return null
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center text-center">
-      <h1 className="text-title font-semibold text-ink">No menu access assigned</h1>
+      <h1 className="text-title font-semibold text-ink">
+        {accessRefreshError ? 'Unable to load your access' : 'No menu access assigned'}
+      </h1>
       <p className="mt-2 max-w-md text-sm text-muted">
-        Ask a superadmin to grant access to the sections you need.
+        {accessRefreshError
+          ? accessRefreshError
+          : 'Ask a superadmin to grant access to the sections you need.'}
       </p>
+      {accessRefreshError ? (
+        <button
+          type="button"
+          onClick={() => void refreshMenuAccess?.()}
+          className="mt-4 rounded-xs border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-ground"
+        >
+          Try again
+        </button>
+      ) : null}
     </div>
   )
 }

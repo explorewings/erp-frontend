@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { LuCalendarDays, LuFileText, LuLink2, LuPencil, LuSave, LuUserRound } from 'react-icons/lu'
+import { LuCalendarDays, LuFileText, LuLink2, LuPencil, LuSave, LuTrash2, LuUserRound } from 'react-icons/lu'
 import DrawerShell, { BUTTON, ErrorLine, FieldTile, Panel } from '../../calendar/components/drawer-shell.jsx'
 import { updateReportRemarks } from '../api.js'
 
@@ -24,9 +24,12 @@ export default function ReportViewDrawer({
   onClose,
   onEdit,
   onRemarksSaved,
+  onDelete,
 }) {
   const [remarks, setRemarks] = useState(report?.remarks ?? '')
   const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
@@ -35,6 +38,7 @@ export default function ReportViewDrawer({
     setRemarks(report?.remarks ?? '')
     setError('')
     setNotice('')
+    setConfirmDelete(false)
   }, [open, report?.id])
 
   if (!open || !report) return null
@@ -55,6 +59,19 @@ export default function ReportViewDrawer({
   }
 
   const attachment = report.attachment
+
+  const confirmRemove = async () => {
+    setDeleting(true)
+    setError('')
+    try {
+      await onDelete?.(report.id)
+    } catch (deleteError) {
+      setError(deleteError?.message || 'Unable to delete report.')
+      setConfirmDelete(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <DrawerShell
@@ -152,18 +169,59 @@ export default function ReportViewDrawer({
         {error ? <ErrorLine message={error} /> : null}
       </div>
 
-      {canReview ? (
+      {canEdit || canReview ? (
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-line bg-surface px-5 py-4">
-          {error ? <p role="alert" className="min-w-0 text-meta text-danger-strong">{error}</p> : <span />}
-          <button
-            type="button"
-            onClick={() => void saveRemarks()}
-            disabled={busy || remarks === (report.remarks ?? '')}
-            className={BUTTON.primary}
-          >
-            <LuSave className="h-4 w-4" aria-hidden="true" />
-            {busy ? 'Saving…' : 'Save remarks'}
-          </button>
+          {canEdit ? (
+            confirmDelete ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="text-meta text-ink">Delete this report?</span>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className={BUTTON.neutral}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmRemove()}
+                  disabled={deleting}
+                  className="inline-flex items-center gap-2 rounded-xs bg-danger px-3 py-2 text-meta font-medium text-white transition-colors hover:bg-danger-strong disabled:opacity-60"
+                >
+                  <LuTrash2 className="h-4 w-4" aria-hidden="true" />
+                  {deleting ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                disabled={busy || deleting}
+                className="inline-flex items-center gap-2 rounded-xs border border-danger/30 px-3 py-2 text-meta font-medium text-danger-strong transition-colors hover:bg-danger/10 disabled:opacity-50"
+              >
+                <LuTrash2 className="h-4 w-4" aria-hidden="true" />
+                Delete
+              </button>
+            )
+          ) : (
+            <span />
+          )}
+
+          {canReview ? (
+            <div className="flex shrink-0 items-center gap-3">
+              {error ? <p role="alert" className="min-w-0 text-meta text-danger-strong">{error}</p> : null}
+              <button
+                type="button"
+                onClick={() => void saveRemarks()}
+                disabled={busy || remarks === (report.remarks ?? '')}
+                className={BUTTON.primary}
+              >
+                <LuSave className="h-4 w-4" aria-hidden="true" />
+                {busy ? 'Saving…' : 'Save remarks'}
+              </button>
+            </div>
+          ) : null}
         </footer>
       ) : null}
     </DrawerShell>

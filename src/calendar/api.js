@@ -86,8 +86,13 @@ export async function fetchCalendarHistory(token, id, page = 1) {
 }
 
 export async function fetchCalendarUsers(token) {
-  const rows = await request(token, '/settings/users', {}, 'Unable to load people.')
-  return (rows ?? [])
-    .filter((row) => (row.status ?? 'active') === 'active')
-    .map((row) => ({ id: row.id, username: row.username, email: row.email, role: row.role }))
+  // Server-side scoped: only active users who can open the calendar, so
+  // assignee and member pickers never offer someone without access.
+  const rows = await request(token, '/calendar/people', {}, 'Unable to load people.')
+  return (rows ?? []).map((row) => ({
+    id: row.id,
+    username: row.username,
+    email: row.email,
+    role: row.role,
+  }))
 }

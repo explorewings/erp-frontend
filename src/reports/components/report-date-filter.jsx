@@ -50,6 +50,7 @@ function buildMonthCells(year, month) {
 export default function ReportDateFilter({ value, onChange, disabled = false }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef(null)
+  const panelRef = useRef(null)
   const selected = parseIso(value)
   const [cursor, setCursor] = useState(() => {
     const base = selected ?? parseIso(todayIso())
@@ -66,14 +67,21 @@ export default function ReportDateFilter({ value, onChange, disabled = false }) 
     const handleKey = (event) => {
       if (event.key === 'Escape') setOpen(false)
     }
-    const handleReposition = () => setOpen(false)
+    // Scrolling the page moves the trigger, so the panel would drift.
+    // Scrolling inside the panel is a normal way to reach the weeks below.
+    const handleScroll = (event) => {
+      const target = event.target
+      if (target instanceof Node && panelRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const handleResize = () => setOpen(false)
     document.addEventListener('keydown', handleKey)
-    window.addEventListener('resize', handleReposition)
-    window.addEventListener('scroll', handleReposition, true)
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('scroll', handleScroll, true)
     return () => {
       document.removeEventListener('keydown', handleKey)
-      window.removeEventListener('resize', handleReposition)
-      window.removeEventListener('scroll', handleReposition, true)
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('scroll', handleScroll, true)
     }
   }, [open])
 
@@ -94,14 +102,28 @@ export default function ReportDateFilter({ value, onChange, disabled = false }) 
   const [anchor, setAnchor] = useState(null)
 
   const openPicker = () => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect()
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (rect) {
       const width = Math.min(304, window.innerWidth - 32)
       const left = Math.min(
         Math.max(16, rect.right - width),
         window.innerWidth - width - 16,
       )
-      setAnchor({ top: rect.bottom + 8, left, width })
+      // Approximate rendered height: header + 6 week rows + footer + padding.
+      const PANEL_HEIGHT = 356
+      const GAP = 8
+      const spaceBelow = window.innerHeight - rect.bottom - GAP - 16
+      const spaceAbove = rect.top - GAP - 16
+      const flipAbove = spaceBelow < PANEL_HEIGHT && spaceAbove > spaceBelow
+      const available = flipAbove ? spaceAbove : spaceBelow
+      setAnchor({
+        left,
+        width,
+        maxHeight: Math.max(160, Math.min(PANEL_HEIGHT, available)),
+        ...(flipAbove
+          ? { bottom: window.innerHeight - rect.top + GAP }
+          : { top: rect.bottom + GAP }),
+      })
     }
     setOpen((current) => !current)
   }
@@ -140,16 +162,17 @@ export default function ReportDateFilter({ value, onChange, disabled = false }) 
             type="button"
             aria-label="Close date picker"
             onClick={() => setOpen(false)}
-            className="absolute inset-0 cursor-default backdrop-blur-sm"
+            className="absolute inset-0 cursor-default"
           />
           <div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-label="Choose a report date"
-            className="fixed rounded-tile border border-line bg-surface p-3 shadow-panel"
-            style={anchor ? { top: anchor.top, left: anchor.left, width: anchor.width } : undefined}
+            className="fixed flex flex-col overflow-hidden rounded-tile border border-line bg-surface p-3 shadow-panel"
+            style={anchor ? { left: anchor.left, width: anchor.width, maxHeight: anchor.maxHeight, ...(anchor.top !== undefined ? { top: anchor.top } : { bottom: anchor.bottom }) } : { top: 80, left: 16, width: 304, maxHeight: 356 }}
           >
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex shrink-0 items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => shiftMonth(-1)}
@@ -169,7 +192,7 @@ export default function ReportDateFilter({ value, onChange, disabled = false }) 
             </button>
           </div>
 
-          <div className="mt-2 grid grid-cols-7 gap-1">
+          <div className="mt-2 grid min-h-0 flex-1 auto-rows-min grid-cols-7 gap-1 overflow-y-auto">
             {WEEKDAYS.map((label) => (
               <span key={label} className="flex h-7 items-center justify-center text-label font-medium text-muted">
                 {label}
@@ -199,7 +222,7 @@ export default function ReportDateFilter({ value, onChange, disabled = false }) 
             })}
           </div>
 
-          <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2.5">
+          <div className="mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-line pt-2.5">
             <button
               type="button"
               onClick={() => pick(today)}

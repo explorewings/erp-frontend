@@ -150,6 +150,8 @@ export default function Crm() {
     clearMoveError,
     reload: reloadDeals,
     addDeal,
+    updateDeal,
+    removeDeal,
     moveDeal,
   } = useCrmDeals(token, selectedPipeline?.id ?? null)
   const canAddDeal = Boolean(selectedPipeline) && stages.length > 0
@@ -345,10 +347,19 @@ export default function Crm() {
         />
         <DealDetailsDrawer
           open={Boolean(detailsDeal)}
+          token={token}
           deal={detailsDeal}
           pipeline={selectedPipeline}
           stages={stages}
           onClose={() => setDetailsDeal(null)}
+          onDealUpdated={(updated) => {
+            updateDeal(updated)
+            setDetailsDeal(updated)
+          }}
+          onDeleted={(dealId) => {
+            removeDeal(dealId)
+            setDetailsDeal(null)
+          }}
         />
         <ManageStageDrawer
           open={isStageDrawerOpen && Boolean(selectedPipeline)}

@@ -45,6 +45,31 @@ export async function deleteUser(token, id) {
   return data
 }
 
+export async function searchUsers(token, term = '', limit = 20) {
+  const query = new URLSearchParams({ limit: String(limit) })
+  if (term.trim()) query.set('search', term.trim())
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/settings/users?${query}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+  } catch {
+    throw new Error('Cannot reach the server. Is the API running?')
+  }
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(getApiErrorMessage(response, data, 'Unable to load users.'))
+  }
+  return {
+    items: Array.isArray(data?.items) ? data.items : [],
+    total: Number(data?.total) || 0,
+  }
+}
+
 export async function fetchUsers(token) {
   let response
   try {

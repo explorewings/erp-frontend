@@ -83,6 +83,9 @@ function ReportForm({ report, onClose, onSaved }) {
             />
           </label>
           <p className="mt-2 text-meta text-muted">Submission time is recorded automatically.</p>
+          {report ? (
+            <p className="mt-2 text-meta text-muted">Reports can be edited or deleted for 15 minutes after submission.</p>
+          ) : null}
         </Panel>
 
         <Panel title={`Report points (${points.length})`} icon={LuFileText}>
