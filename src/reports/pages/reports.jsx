@@ -8,28 +8,12 @@ import ReportDateFilter from '../components/report-date-filter.jsx'
 import ReportDrawer from '../components/report-drawer.jsx'
 import ReportUserFilter from '../components/report-user-filter.jsx'
 import ReportViewDrawer from '../components/report-view-drawer.jsx'
-
-const EDIT_WINDOW_MS = 15 * 60 * 1000
-
-function todayIso() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-}
-
-function formatDate(value) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
+import { formatDateShort, todayIso } from '../lib/dates.js'
+import { isWithinEditWindow } from '../lib/report-rules.js'
 
 function canEditReport(report, user) {
   const elevated = user?.role === 'superadmin' || user?.role === 'superuser'
-  return elevated || (
-    report.createdBy === user?.id &&
-    Date.now() - new Date(report.submittedAt).getTime() <= EDIT_WINDOW_MS
-  )
+  return elevated || (report.createdBy === user?.id && isWithinEditWindow(report.submittedAt))
 }
 
 function ReportCard({ report, onView }) {
@@ -38,13 +22,13 @@ function ReportCard({ report, onView }) {
     <button
       type="button"
       onClick={() => onView(report)}
-      aria-label={`View report for ${formatDate(report.reportDate)}`}
+      aria-label={`View report for ${formatDateShort(report.reportDate)}`}
       className="min-w-0 w-full rounded-control border p-4 text-left transition-colors hover:bg-ground/50 sm:p-5"
       style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-ink">{formatDate(report.reportDate)}</h2>
+          <h2 className="truncate text-sm font-semibold text-ink">{formatDateShort(report.reportDate)}</h2>
           <p className="mt-1 text-xs text-muted">Created by {report.createdByUsername || 'Unknown user'}</p>
         </div>
         <span className="shrink-0 rounded-none bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent-strong">
@@ -286,7 +270,7 @@ export default function Reports() {
           </h2>
           <p className="mt-1 text-sm text-muted">
             {selectedDate
-              ? `${isElevated ? 'No one submitted' : 'You have not submitted'} a report on ${formatDate(selectedDate)}.`
+              ? `${isElevated ? 'No one submitted' : 'You have not submitted'} a report on ${formatDateShort(selectedDate)}.`
               : selectedUser
                 ? 'This person has not submitted any reports yet.'
                 : 'Submitted reports will appear here.'}

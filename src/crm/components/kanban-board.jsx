@@ -59,7 +59,7 @@ const columnKeyboardCoordinates = (event, { context }) => {
 }
 
 /** A column's deal list. It looks the same whether or not a drag is in progress. */
-const StageDeals = memo(function StageDeals({ deals, onDealMove, onViewDeal }) {
+const StageDeals = memo(function StageDeals({ deals, onDealMove, onViewDeal, onRequestDeleteDeal }) {
   return (
     <div
       className="min-h-0 flex-1 space-y-2 overflow-y-auto border p-2.5"
@@ -73,7 +73,13 @@ const StageDeals = memo(function StageDeals({ deals, onDealMove, onViewDeal }) {
     >
       {deals.length > 0 ? (
         deals.map((deal) => (
-          <CrmCard key={deal.id} deal={deal} draggable={Boolean(onDealMove)} onView={onViewDeal} />
+          <CrmCard
+            key={deal.id}
+            deal={deal}
+            draggable={Boolean(onDealMove)}
+            onView={onViewDeal}
+            onRequestDeleteDeal={onRequestDeleteDeal}
+          />
         ))
       ) : (
         <div
@@ -88,7 +94,7 @@ const StageDeals = memo(function StageDeals({ deals, onDealMove, onViewDeal }) {
   )
 })
 
-const StageColumn = memo(function StageColumn({ stage, index, deals, onDealMove, onViewDeal }) {
+const StageColumn = memo(function StageColumn({ stage, index, deals, onDealMove, onViewDeal, onRequestDeleteDeal }) {
   const { setNodeRef } = useDroppable({ id: stageDndId(stage.id), disabled: !onDealMove })
 
   return (
@@ -119,7 +125,7 @@ const StageColumn = memo(function StageColumn({ stage, index, deals, onDealMove,
         </div>
       </header>
       <div className="mt-4 flex min-h-0 flex-1 flex-col">
-        <StageDeals deals={deals} onDealMove={onDealMove} onViewDeal={onViewDeal} />
+        <StageDeals deals={deals} onDealMove={onDealMove} onViewDeal={onViewDeal} onRequestDeleteDeal={onRequestDeleteDeal} />
 </div>
     </section>
   )
@@ -132,6 +138,7 @@ export default function KanbanBoard({
   hasPipeline = false,
   onDealMove,
   onViewDeal,
+  onRequestDeleteDeal,
   onCreatePipeline,
 }) {
   const [activeDeal, setActiveDeal] = useState(null)
@@ -294,6 +301,7 @@ export default function KanbanBoard({
                 deals={stageDeals.get(String(stage.id)) || EMPTY_DEALS}
                 onDealMove={onDealMove}
                 onViewDeal={onViewDeal}
+                onRequestDeleteDeal={onRequestDeleteDeal}
               />
             )
           })}

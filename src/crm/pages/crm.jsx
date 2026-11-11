@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LuArrowRightLeft,
   LuChevronLeft,
@@ -12,6 +12,7 @@ import {
   LuUsers,
 } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
+import Alert from '../../appcomponents/alert.jsx'
 import Loader from '../../appcomponents/loader.jsx'
 import AddDeal from '../components/add-deal.jsx'
 import AssignUsersDrawer from '../components/assign-users-drawer.jsx'
@@ -25,6 +26,7 @@ import PipelineSelect from '../components/pipeline-select.jsx'
 import PipelineTag from '../components/pipeline-tag.jsx'
 import SlidingTabs from '../components/sliding-tabs.jsx'
 import { scrollBoardByColumns } from '../board-scroll.js'
+import { deleteCrmDeal } from '../api.js'
 import useCrmDeals from '../hooks/use-crm-deals.js'
 import useCrmPipelines from '../hooks/use-crm-pipelines.js'
 
@@ -33,6 +35,26 @@ const TABS = [
   { id: 'actions', label: 'Actions' },
 ]
 const EMPTY_LIST = []
+
+/** Remembers the CRM tab and selected pipeline per user across reloads. */
+const crmStorageKey = (userId, name) => `ew:crm:${userId ?? 'guest'}:${name}`
+
+const readCrmStorage = (key, fallback) => {
+  try {
+    const value = window.localStorage.getItem(key)
+    return value === null ? fallback : value
+  } catch {
+    return fallback
+  }
+}
+
+const writeCrmStorage = (key, value) => {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // Storage can be unavailable (private mode); the selection just resets.
+  }
+}
 
 /**
  * Actions tab cards. `scope: 'all'` cards apply to every pipeline and are
@@ -127,8 +149,19 @@ export default function Crm() {
     removePipeline,
   } = useCrmPipelines(token)
 
-  const [activeTab, setActiveTab] = useState('pipeline')
-  const [selectedPipelineId, setSelectedPipelineId] = useState('')
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = readCrmStorage(crmStorageKey(user?.id, 'tab'), 'pipeline')
+    return TABS.some((tab) => tab.id === saved) ? saved : 'pipeline'
+  })
+  const [selectedPipelineId, setSelectedPipelineId] = useState(() =>
+    readCrmStorage(crmStorageKey(user?.id, 'pipeline'), ''),
+  )
+  useEffect(() => {
+    writeCrmStorage(crmStorageKey(user?.id, 'tab'), activeTab)
+  }, [user?.id, activeTab])
+  useEffect(() => {
+    writeCrmStorage(crmStorageKey(user?.id, 'pipeline'), selectedPipelineId)
+  }, [user?.id, selectedPipelineId])
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [pipelineDrawerTab, setPipelineDrawerTab] = useState(null)
@@ -136,6 +169,9 @@ export default function Crm() {
   const [isAssignUsersDrawerOpen, setIsAssignUsersDrawerOpen] = useState(false)
   const [isAddDealOpen, setIsAddDealOpen] = useState(false)
   const [detailsDeal, setDetailsDeal] = useState(null)
+  const [dealPendingDelete, setDealPendingDelete] = useState(null)
+  const [isDeletingDeal, setIsDeletingDeal] = useState(false)
+  const [dealDeleteError, setDealDeleteError] = useState('')
   const boardScrollerRef = useRef(null)
 
   // Fall back to the first pipeline when nothing (or a deleted pipeline) is selected.
@@ -170,6 +206,27 @@ export default function Crm() {
     setSelectedPipelineId(id)
     setSearchQuery('')
   }
+
+  const requestDeleteDeal = useCallback((deal) => {
+    setDealDeleteError('')
+    setDealPendingDelete(deal)
+  }, [])
+
+  const confirmDeleteDeal = useCallback(async () => {
+    if (!dealPendingDelete || isDeletingDeal) return
+    setIsDeletingDeal(true)
+    setDealDeleteError('')
+    try {
+      await deleteCrmDeal(token, dealPendingDelete.id)
+      removeDeal(dealPendingDelete.id)
+      setDetailsDeal((current) => (current?.id === dealPendingDelete.id ? null : current))
+      setDealPendingDelete(null)
+    } catch (err) {
+      setDealDeleteError(err?.message || 'Unable to delete deal.')
+    } finally {
+      setIsDeletingDeal(false)
+    }
+  }, [dealPendingDelete, isDeletingDeal, token, removeDeal])
 
   const scrollBoard = (direction) => scrollBoardByColumns(boardScrollerRef.current, direction)
 
@@ -308,6 +365,7 @@ export default function Crm() {
                     hasPipeline={Boolean(selectedPipeline)}
                     onDealMove={dealsError ? undefined : moveDeal}
                     onViewDeal={setDetailsDeal}
+                    onRequestDeleteDeal={requestDeleteDeal}
                     onCreatePipeline={() => setPipelineDrawerTab('create')}
                   />
                 )}
@@ -371,8 +429,10 @@ export default function Crm() {
         <AssignUsersDrawer
           open={isAssignUsersDrawerOpen && Boolean(selectedPipeline)}
           token={token}
+          user={user}
           pipeline={selectedPipeline}
           onClose={() => setIsAssignUsersDrawerOpen(false)}
+          onAccessChange={(pipelineId, userIds) => updatePipeline(pipelineId, { allowedUserIds: userIds })}
         />
         <ManagePipelineDrawer
           open={pipelineDrawerTab !== null}
@@ -390,6 +450,25 @@ export default function Crm() {
           }}
           onRenamed={(renamed) => updatePipeline(renamed.id, { name: renamed.name })}
           onDeleted={handlePipelineDeleted}
+        />
+        <Alert
+          open={Boolean(dealPendingDelete)}
+          title="Delete deal?"
+          description={
+            dealPendingDelete
+              ? `"${dealPendingDelete.client?.name || 'This client'}" will be removed from "${selectedPipeline?.name || 'this pipeline'}". The client and any deals in other pipelines will remain.`
+              : ''
+          }
+          confirmLabel="Delete deal"
+          isConfirming={isDeletingDeal}
+          feedback={dealDeleteError}
+          onConfirm={confirmDeleteDeal}
+          onCancel={() => {
+            if (!isDeletingDeal) {
+              setDealPendingDelete(null)
+              setDealDeleteError('')
+            }
+          }}
         />
       </section>
     </>

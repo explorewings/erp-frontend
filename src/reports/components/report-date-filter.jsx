@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuCalendarDays, LuChevronDown, LuChevronLeft, LuChevronRight, LuX } from 'react-icons/lu'
+import { todayIso } from '../lib/dates.js'
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
+/** Build a `YYYY-MM-DD` from calendar-cell parts (month is 0-based). */
 function toIso(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-function todayIso() {
-  const now = new Date()
-  return toIso(now.getFullYear(), now.getMonth(), now.getDate())
-}
-
+/** Split a `YYYY-MM-DD` into `{ year, month (0-based), day }` for calendar maths. */
 function parseIso(value) {
   if (!value) return null
   const [year, month, day] = value.split('-').map(Number)

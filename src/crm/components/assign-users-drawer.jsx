@@ -1,12 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuArrowLeftRight, LuCircleUserRound, LuUsers, LuX } from 'react-icons/lu'
+import {
+  LuArrowLeftRight,
+  LuCircleUserRound,
+  LuPencil,
+  LuUsers,
+  LuX,
+} from 'react-icons/lu'
 import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
+import Loader from '../../appcomponents/loader.jsx'
 import Tooltip from '../../appcomponents/tooltip.jsx'
-import { fetchCrmUsers } from '../api.js'
+import {
+  addCrmPipelineUser,
+  fetchCrmPipelineUsers,
+  removeCrmPipelineUser,
+} from '../api.js'
 import InlineError from './inline-error.jsx'
 import PipelineTag from './pipeline-tag.jsx'
 import SlidingTabs from './sliding-tabs.jsx'
+import UserSelect from './user-select.jsx'
 import { isSuperRole } from '../utils.js'
 
 const TABS = [
@@ -35,24 +47,46 @@ const ASSIGNMENT_METHODS = [
   },
 ]
 
-export default function AssignUsersDrawer({ open, token, pipeline, onClose }) {
+export default function AssignUsersDrawer({ open, token, pipeline, user, onClose, onAccessChange }) {
   if (!open || !pipeline) return null
-  return <AssignUsersDrawerContent token={token} pipeline={pipeline} onClose={onClose} />
+  return (
+    <AssignUsersDrawerContent
+      token={token}
+      pipeline={pipeline}
+      currentUser={user}
+      onClose={onClose}
+      onAccessChange={onAccessChange}
+    />
+  )
 }
 
-function AssignUsersDrawerContent({ token, pipeline, onClose }) {
+function AssignUsersDrawerContent({ token, pipeline, currentUser, onClose, onAccessChange }) {
   const [visible, setVisible] = useState(false)
   const [activeTab, setActiveTab] = useState(TABS[0].id)
-  const [users, setUsers] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [reloadTick, setReloadTick] = useState(0)
+  const [members, setMembers] = useState([])
+  const [isLoadingMembers, setIsLoadingMembers] = useState(true)
+  const [membersError, setMembersError] = useState('')
+  const [membersReloadTick, setMembersReloadTick] = useState(0)
+  const [isEditingAccess, setIsEditingAccess] = useState(false)
+  const [isAddingUser, setIsAddingUser] = useState(false)
+  const [removingUserId, setRemovingUserId] = useState(null)
+  const [accessError, setAccessError] = useState('')
+  const [accessNotice, setAccessNotice] = useState('')
+
   const onCloseRef = useRef(onClose)
   const ignorePopRef = useRef(false)
+  const onAccessChangeRef = useRef(onAccessChange)
+
+  const canEditAccess = isSuperRole(currentUser?.role)
+  const memberIds = members.map((member) => member.id)
 
   useEffect(() => {
     onCloseRef.current = onClose
   }, [onClose])
+
+  useEffect(() => {
+    onAccessChangeRef.current = onAccessChange
+  }, [onAccessChange])
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setVisible(true))
@@ -61,22 +95,22 @@ function AssignUsersDrawerContent({ token, pipeline, onClose }) {
 
   useEffect(() => {
     let cancelled = false
-    setIsLoading(true)
-    setError('')
-    fetchCrmUsers(token)
+    setIsLoadingMembers(true)
+    setMembersError('')
+    fetchCrmPipelineUsers(token, pipeline.id)
       .then((list) => {
-        if (!cancelled) setUsers(Array.isArray(list) ? list : [])
+        if (!cancelled) setMembers(Array.isArray(list) ? list : [])
       })
       .catch((err) => {
-        if (!cancelled) setError(err?.message || 'Unable to load users.')
+        if (!cancelled) setMembersError(err?.message || 'Unable to load pipeline users.')
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled) setIsLoadingMembers(false)
       })
     return () => {
       cancelled = true
     }
-  }, [token, reloadTick])
+  }, [token, pipeline.id, membersReloadTick])
 
   const closeDrawer = () => {
     ignorePopRef.current = true
@@ -112,11 +146,55 @@ function AssignUsersDrawerContent({ token, pipeline, onClose }) {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  const assignedUserIds = Array.isArray(pipeline.allowedUserIds) ? pipeline.allowedUserIds : []
-  const assignedUsers = assignedUserIds.map((id) => ({
-    id,
-    user: users.find((candidate) => candidate.id === id),
-  }))
+  const startEditingAccess = () => {
+    setIsEditingAccess(true)
+    setAccessError('')
+    setAccessNotice('')
+  }
+
+  const stopEditingAccess = () => {
+    setIsEditingAccess(false)
+    setAccessError('')
+    setAccessNotice('')
+  }
+
+  const handleAddUser = async (userId) => {
+    if (!userId || isAddingUser) return
+    setIsAddingUser(true)
+    setAccessError('')
+    setAccessNotice('')
+    try {
+      const added = await addCrmPipelineUser(token, pipeline.id, userId)
+      const next = [...members, added].sort((a, b) =>
+        String(a.username || '').localeCompare(String(b.username || '')),
+      )
+      setMembers(next)
+      setAccessNotice(`Added ${added.username || 'user'}.`)
+      onAccessChangeRef.current?.(pipeline.id, next.map((member) => member.id))
+    } catch (err) {
+      setAccessError(err?.message || 'Unable to add user.')
+    } finally {
+      setIsAddingUser(false)
+    }
+  }
+
+  const handleRemoveUser = async (member) => {
+    if (removingUserId || isAddingUser) return
+    setRemovingUserId(member.id)
+    setAccessError('')
+    setAccessNotice('')
+    try {
+      await removeCrmPipelineUser(token, pipeline.id, member.id)
+      const next = members.filter((candidate) => candidate.id !== member.id)
+      setMembers(next)
+      setAccessNotice(`Removed ${member.username || 'user'}.`)
+      onAccessChangeRef.current?.(pipeline.id, next.map((remaining) => remaining.id))
+    } catch (err) {
+      setAccessError(err?.message || 'Unable to remove user.')
+    } finally {
+      setRemovingUserId(null)
+    }
+  }
 
   return createPortal(
     <>
@@ -169,61 +247,121 @@ function AssignUsersDrawerContent({ token, pipeline, onClose }) {
               aria-labelledby="assign-users-tab-pipeline-access"
               hidden={activeTab !== 'pipeline-access'}
             >
-              <div className="mb-3">
-                <h3 className="text-sm font-semibold text-[var(--ew-ink)]">Users with pipeline access</h3>
-                <p className="mt-1 text-xs text-[var(--ew-muted)]">
-                  These users can access this pipeline and its deals.
-                </p>
-              </div>
-              {isLoading ? (
-                <p role="status" className="py-6 text-center text-sm text-[var(--ew-muted)]">
-                  Loading users...
-                </p>
-              ) : error ? (
-                <InlineError>
-                  {error}
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-[var(--ew-ink)]">Users with pipeline access</h3>
+                  <p className="mt-1 text-xs text-[var(--ew-muted)]">
+                    These users can access this pipeline and its deals.
+                  </p>
+                </div>
+                {canEditAccess ? (
                   <button
                     type="button"
-                    onClick={() => setReloadTick((tick) => tick + 1)}
+                    onClick={isEditingAccess ? stopEditingAccess : startEditingAccess}
+                    disabled={isAddingUser || Boolean(removingUserId)}
+                    aria-pressed={isEditingAccess}
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xs border border-[var(--ew-line)] bg-ground px-3 text-xs font-medium text-[var(--ew-ink)] transition-colors hover:bg-ground/70 disabled:opacity-60"
+                  >
+                    {isEditingAccess ? <LuX className="h-3.5 w-3.5" aria-hidden="true" /> : <LuPencil className="h-3.5 w-3.5" aria-hidden="true" />}
+                    {isEditingAccess ? 'Done' : 'Edit'}
+                  </button>
+                ) : null}
+              </div>
+
+              {isEditingAccess ? (
+                <div className="mb-3 rounded-xs border p-3" style={{ borderColor: 'var(--ew-line)' }}>
+                  <p className="text-xs font-medium text-[var(--ew-ink)]">Add user</p>
+                  <p className="mt-1 text-xs text-[var(--ew-muted)]">
+                    Pick a user to grant access to this pipeline.
+                  </p>
+                  <div className="mt-2">
+                    <UserSelect
+                      token={token}
+                      value=""
+                      onChange={handleAddUser}
+                      excludedIds={memberIds}
+                      disabled={isAddingUser}
+                      placeholder={isAddingUser ? 'Adding...' : 'Select a user'}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {membersError ? (
+                <InlineError>
+                  {membersError}
+                  <button
+                    type="button"
+                    onClick={() => setMembersReloadTick((tick) => tick + 1)}
                     className="ml-2 font-medium underline"
                   >
                     Retry
                   </button>
                 </InlineError>
-              ) : assignedUsers.length === 0 ? (
+              ) : null}
+              {accessError ? <InlineError className="mt-3">{accessError}</InlineError> : null}
+              {accessNotice && !accessError ? (
+                <p role="status" className="mb-3 mt-3 text-xs text-[var(--ew-muted)]">
+                  {accessNotice}
+                </p>
+              ) : null}
+
+              {membersError ? null : isLoadingMembers ? (
+                <p role="status" className="py-6 text-center text-sm text-[var(--ew-muted)]">
+                  Loading users...
+                </p>
+              ) : members.length === 0 ? (
                 <p className="rounded-xs border border-dashed p-4 text-sm text-[var(--ew-muted)]">
                   No users are assigned to this pipeline.
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {assignedUsers.map(({ id, user }) => (
-                    <li key={id}>
-                      <Tooltip
-                        content={isSuperRole(user?.role) ? 'Superadmin has full access' : null}
-                        className="block w-full"
-                      >
-                        <div
-                        aria-disabled={isSuperRole(user?.role) || undefined}
-                        tabIndex={isSuperRole(user?.role) ? 0 : undefined}
-                        className={`flex items-center justify-between gap-3 rounded-xs border px-3 py-2 ${
-                          isSuperRole(user?.role) ? 'pointer-events-none opacity-60' : ''
-                        }`}
-                        style={{ borderColor: 'var(--ew-line)' }}
+                  {members.map((member) => {
+                    const isCreator = member.id === pipeline.createdBy
+                    const isSuper = isSuperRole(member.role)
+                    const removable = isEditingAccess && !isCreator && !isSuper
+                    return (
+                      <li key={member.id}>
+                        <Tooltip
+                          content={isSuper ? 'Superadmin has full access' : null}
+                          className="block w-full"
                         >
-                          <span className="min-w-0 truncate text-sm text-[var(--ew-ink)]">
-                            {user?.username || 'User unavailable'}
-                            {user?.id === pipeline.createdBy ? (
-                              <span className="ml-2 text-xs text-[var(--ew-muted)]">Pipeline creator</span>
-                            ) : null}
-                          </span>
-                          <span className="shrink-0 text-xs capitalize text-[var(--ew-muted)]">
-                            {user ? user.role : 'Unavailable'}
-                            {user?.status === 'inactive' ? ' · Inactive' : ''}
-                          </span>
-                        </div>
-                      </Tooltip>
-                    </li>
-                  ))}
+                          <div
+                            className="flex items-center justify-between gap-3 rounded-xs border px-3 py-2"
+                            style={{ borderColor: 'var(--ew-line)' }}
+                          >
+                            <span className="min-w-0 truncate text-sm text-[var(--ew-ink)]">
+                              {member.username || 'User unavailable'}
+                              {isCreator ? (
+                                <span className="ml-2 text-xs text-[var(--ew-muted)]">Pipeline creator</span>
+                              ) : null}
+                            </span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="text-xs capitalize text-[var(--ew-muted)]">
+                                {member.role || 'Unavailable'}
+                                {member.status === 'inactive' ? ' · Inactive' : ''}
+                              </span>
+                              {removable ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveUser(member)}
+                                  disabled={Boolean(removingUserId) || isAddingUser}
+                                  aria-label={`Remove ${member.username || 'user'} from this pipeline`}
+                                  className="flex h-6 w-6 items-center justify-center rounded-xs border border-[var(--ew-line)] text-muted transition-colors hover:border-danger hover:text-danger disabled:opacity-60"
+                                >
+                                  {removingUserId === member.id ? (
+                                    <Loader size={0.7} />
+                                  ) : (
+                                    <LuX className="h-3.5 w-3.5" aria-hidden="true" />
+                                  )}
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </Tooltip>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </section>

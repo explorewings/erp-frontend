@@ -1,7 +1,8 @@
-import { memo } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
-import { LuGripVertical, LuMail, LuPhone } from 'react-icons/lu'
+import { LuMail, LuPhone } from 'react-icons/lu'
 import { MdKeyboardDoubleArrowRight } from 'react-icons/md'
+import { VscSettings } from 'react-icons/vsc'
 import { dealDndId } from '../utils.js'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' })
@@ -16,19 +17,101 @@ function formatAdded(value) {
 }
 
 /** Visual body of a deal card, shared by the board card and the drag overlay. */
-const DealCardBody = memo(function DealCardBody({ deal, showGrip = true, onView }) {
+const DealCardBody = memo(function DealCardBody({
+  deal,
+  showSettings = false,
+  onView,
+  onRequestDelete,
+}) {
   const { client } = deal
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  const closeMenu = () => setMenuOpen(false)
+
+  useEffect(() => {
+    if (!menuOpen) return undefined
+    const handlePointerDown = (event) => {
+      if (!menuRef.current?.contains(event.target)) setMenuOpen(false)
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
+
+  const menuItemClass =
+    'flex w-full items-center px-3 py-1.5 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:bg-[var(--ew-line)]/40'
+
   return (
     <>
       <div className="flex items-start gap-2">
         <h3 className="min-w-0 flex-1 truncate text-sm font-semibold leading-5 text-[var(--ew-ink)]" title={client.name}>
           {client.name}
         </h3>
-        {showGrip ? (
-          <LuGripVertical
-            className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ew-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
-            aria-hidden="true"
-          />
+        {showSettings ? (
+          <div
+            ref={menuRef}
+            className="relative shrink-0"
+            onPointerDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              aria-label="Deal actions"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={(event) => {
+                event.stopPropagation()
+                setMenuOpen((open) => !open)
+              }}
+              className="grid h-6 w-6 place-items-center rounded-[4px] border border-[var(--ew-line)] bg-[linear-gradient(145deg,#ffffff,#f4eee9)] text-[var(--ew-muted)] shadow-[1.5px_1.5px_3px_rgba(27,26,24,0.14),-1.5px_-1.5px_3px_rgba(255,255,255,0.95),inset_1px_1px_1px_rgba(255,255,255,0.9)] transition-[color,border-color,box-shadow] duration-150 hover:border-[var(--ew-accent)] hover:text-[var(--ew-ink)] hover:shadow-[2px_2px_5px_rgba(27,26,24,0.16),-2px_-2px_5px_rgba(255,255,255,0.98),inset_1px_1px_1px_rgba(255,255,255,0.95)] active:shadow-[inset_2px_2px_4px_rgba(27,26,24,0.15),inset_-2px_-2px_4px_rgba(255,255,255,0.95)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ew-accent)]"
+            >
+              <VscSettings className="h-3.5 w-3.5 drop-shadow-[0_1px_0_rgba(255,255,255,0.8)]" aria-hidden="true" />
+            </button>
+            {menuOpen ? (
+              <div
+                role="menu"
+                aria-label="Deal actions"
+                className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-[6px] border border-[var(--ew-line)] bg-[var(--ew-surface)] py-1 text-[var(--ew-ink)] shadow-[0_8px_24px_-8px_rgba(27,26,24,0.35)]"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    closeMenu()
+                    onRequestDelete?.(deal)
+                  }}
+                  className={`${menuItemClass} text-danger hover:bg-danger/10`}
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled
+                  title="Not available yet"
+                  className={`${menuItemClass} cursor-not-allowed text-[var(--ew-muted)] opacity-50`}
+                >
+                  Move to pipeline
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled
+                  title="Not available yet"
+                  className={`${menuItemClass} cursor-not-allowed text-[var(--ew-muted)] opacity-50`}
+                >
+                  Copy to pipeline
+                </button>
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -83,7 +166,7 @@ const cardSurface =
  * A deal on the board. While it is being dragged, the card stays in its column
  * as a dashed slot and the moving copy is rendered by <DealCardOverlay>.
  */
-function CrmCard({ deal, draggable = false, onView }) {
+function CrmCard({ deal, draggable = false, onView, onRequestDeleteDeal }) {
   const client = deal?.client
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: dealDndId(deal?.id),
@@ -119,7 +202,12 @@ function CrmCard({ deal, draggable = false, onView }) {
           : ''
       }`}
     >
-      <DealCardBody deal={deal} showGrip={draggable} onView={onView} />
+      <DealCardBody
+        deal={deal}
+        showSettings={Boolean(onRequestDeleteDeal)}
+        onView={onView}
+        onRequestDelete={onRequestDeleteDeal}
+      />
     </article>
   )
 }
@@ -134,7 +222,7 @@ export function DealCardOverlay({ deal }) {
       aria-hidden="true"
       className={`${cardSurface} cursor-grabbing border-[var(--ew-accent)] shadow-[0_2px_6px_rgba(27,26,24,0.16),0_8px_18px_-8px_rgba(27,26,24,0.2)]`}
     >
-      <DealCardBody deal={deal} showGrip={false} />
+      <DealCardBody deal={deal} showSettings={false} />
     </article>
   )
 }

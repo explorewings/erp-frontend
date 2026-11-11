@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuChevronDown, LuSearch, LuUserRound, LuX } from 'react-icons/lu'
 import { searchUsers } from '../../settings/api.js'
@@ -48,58 +48,95 @@ export default function ReportUserFilter({ value, selectedUser, token, onChange,
     }
   }, [open, token, query])
 
+  const [anchor, setAnchor] = useState(null)
+
+  /** Measure the trigger and place the panel, flipping above when space is short. */
+  const reposition = useCallback(() => {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    // On mobile the on-screen keyboard shrinks the *visual* viewport without
+    // changing window.innerHeight, so measure against visualViewport when it
+    // exists or the panel ends up underneath the keyboard.
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+    const width = Math.min(288, window.innerWidth - 32)
+    const left = Math.min(
+      Math.max(16, rect.right - width),
+      window.innerWidth - width - 16,
+    )
+    const PANEL_HEIGHT = 320
+    const GAP = 8
+    const spaceBelow = viewportHeight - rect.bottom - GAP - 16
+    const spaceAbove = rect.top - GAP - 16
+    const flipAbove = spaceBelow < PANEL_HEIGHT && spaceAbove > spaceBelow
+    const available = flipAbove ? spaceAbove : spaceBelow
+    setAnchor({
+      left,
+      width,
+      maxHeight: Math.max(160, Math.min(PANEL_HEIGHT, available)),
+      ...(flipAbove
+        ? { bottom: window.innerHeight - rect.top + GAP }
+        : { top: rect.bottom + GAP }),
+    })
+  }, [])
+
   useEffect(() => {
     if (!open) return undefined
     const handleKey = (event) => {
       if (event.key === 'Escape') setOpen(false)
     }
-    // Scrolling the page moves the trigger, so the panel would drift.
+    // Scrolling the page moves the trigger, so the panel would drift. Re-anchor
+    // instead of closing: on mobile, focusing the search input makes the browser
+    // scroll the field into view, which used to dismiss the panel instantly.
     const handleScroll = (event) => {
       const target = event.target
       if (target instanceof Node && panelRef.current?.contains(target)) return
-      setOpen(false)
+      const rect = containerRef.current?.getBoundingClientRect()
+      // Trigger scrolled out of view: nothing sensible left to anchor to.
+      if (!rect || rect.bottom < 0 || rect.top > window.innerHeight) {
+        setOpen(false)
+        return
+      }
+      reposition()
     }
-    const handleResize = () => setOpen(false)
+    // A mobile keyboard changes only the viewport *height*. Closing on any
+    // resize dismissed the panel the moment the search input was focused, so
+    // react to width changes (rotation / real resizes) and re-anchor on height.
+    let lastWidth = window.innerWidth
+    const handleResize = () => {
+      if (window.innerWidth !== lastWidth) {
+        lastWidth = window.innerWidth
+        setOpen(false)
+        return
+      }
+      reposition()
+    }
     document.addEventListener('keydown', handleKey)
     window.addEventListener('resize', handleResize)
     window.addEventListener('scroll', handleScroll, true)
+    // The keyboard opening/closing fires visualViewport resize, not window resize.
+    window.visualViewport?.addEventListener('resize', reposition)
     return () => {
       document.removeEventListener('keydown', handleKey)
       window.removeEventListener('resize', handleResize)
       window.removeEventListener('scroll', handleScroll, true)
+      window.visualViewport?.removeEventListener('resize', reposition)
     }
-  }, [open])
+  }, [open, reposition])
 
   useEffect(() => {
-    if (!open) setQuery('')
-    else searchRef.current?.focus()
+    if (!open) {
+      setQuery('')
+      return
+    }
+    // Autofocus is right on desktop but on touch/mobile it pops the keyboard the
+    // instant the panel opens, which resizes the viewport and fights the anchor.
+    // There the user taps the field when ready.
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches
+    if (!coarse) searchRef.current?.focus()
   }, [open])
 
-  const [anchor, setAnchor] = useState(null)
-
   const openPicker = () => {
-    const rect = containerRef.current?.getBoundingClientRect()
-    if (rect) {
-      const width = Math.min(288, window.innerWidth - 32)
-      const left = Math.min(
-        Math.max(16, rect.right - width),
-        window.innerWidth - width - 16,
-      )
-      const PANEL_HEIGHT = 320
-      const GAP = 8
-      const spaceBelow = window.innerHeight - rect.bottom - GAP - 16
-      const spaceAbove = rect.top - GAP - 16
-      const flipAbove = spaceBelow < PANEL_HEIGHT && spaceAbove > spaceBelow
-      const available = flipAbove ? spaceAbove : spaceBelow
-      setAnchor({
-        left,
-        width,
-        maxHeight: Math.max(160, Math.min(PANEL_HEIGHT, available)),
-        ...(flipAbove
-          ? { bottom: window.innerHeight - rect.top + GAP }
-          : { top: rect.bottom + GAP }),
-      })
-    }
+    reposition()
     setOpen((current) => !current)
   }
 

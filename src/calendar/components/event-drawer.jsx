@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { LuAlignLeft, LuCircleArrowRight, LuHistory, LuHourglass, LuPencil, LuTrash2 } from 'react-icons/lu'
+import { useEffect, useMemo, useState } from 'react'
+import { LuAlignLeft, LuCircleArrowRight, LuHourglass, LuPencil, LuTrash2 } from 'react-icons/lu'
 import Loader from '../../appcomponents/loader.jsx'
+import SlidingTabs from '../../crm/components/sliding-tabs.jsx'
 import { deleteCalendarEvent, fetchCalendarHistory, updateCalendarEvent } from '../api.js'
 import { definitionFor } from '../events/events.jsx'
 import { EVENT_TYPES } from '../lib/event-meta.js'
@@ -265,6 +266,13 @@ export default function EventDrawer({ event, viewer, token, users, assignees, on
   const permissions = event.permissions
   const actions = eventActions(event)
   const typeLabel = EVENT_TYPES[event.type]?.label ?? 'Event'
+  const viewTabs = useMemo(
+    () => [
+      { id: 'details', label: typeLabel },
+      { id: 'history', label: 'History' },
+    ],
+    [typeLabel],
+  )
 
   const run = async (work, success) => {
     setBusy(true)
@@ -336,29 +344,13 @@ export default function EventDrawer({ event, viewer, token, users, assignees, on
         mode === 'edit' ? (
           <TypeLabel type={event.type} />
         ) : (
-          <div role="tablist" aria-label={`${typeLabel} views`} className="flex items-center gap-1">
-            <button
-              role="tab"
-              aria-selected={tab === 'details'}
-              onClick={() => setTab('details')}
-              className={`rounded-xs px-2 py-1 text-meta font-medium transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 ${
-                tab === 'details' ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:bg-ground hover:text-ink'
-              }`}
-            >
-              <TypeLabel type={event.type} />
-            </button>
-            <button
-              role="tab"
-              aria-selected={tab === 'history'}
-              onClick={() => setTab('history')}
-              className={`inline-flex items-center gap-1.5 rounded-xs px-2 py-1 text-meta font-medium transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 ${
-                tab === 'history' ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:bg-ground hover:text-ink'
-              }`}
-            >
-              <LuHistory className="h-3.5 w-3.5" aria-hidden="true" />
-              History
-            </button>
-          </div>
+          <SlidingTabs
+            tabs={viewTabs}
+            activeTab={tab}
+            onChange={setTab}
+            ariaLabel={`${typeLabel} views`}
+            idPrefix="calendar-event"
+          />
         )
       }
     >

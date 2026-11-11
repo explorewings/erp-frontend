@@ -125,11 +125,6 @@ export default function NotificationDrawer({ data, onClose, onNavigate }) {
               <h2 id="notifications-title" className="text-sm font-semibold text-ink">
                 Notifications
               </h2>
-              {unread ? (
-                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#cc785c] px-1.5 text-[11px] font-semibold tabular-nums text-white">
-                  {unread > 99 ? '99+' : unread}
-                </span>
-              ) : null}
             </div>
             <div className="flex items-center gap-2">
               {unread ? (

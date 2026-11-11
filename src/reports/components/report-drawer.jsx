@@ -1,13 +1,9 @@
 import { useState } from 'react'
 import { LuCalendarDays, LuFileText, LuLink2, LuPlus, LuTrash2, LuUpload } from 'react-icons/lu'
 import DrawerShell, { BUTTON, ErrorLine, Panel } from '../../calendar/components/drawer-shell.jsx'
+import { todayIso } from '../lib/dates.js'
 
 const FILE_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp'
-
-function todayLocal() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-}
 
 function makeFormData(form, attachmentMode, file) {
   const data = new FormData()
@@ -20,7 +16,7 @@ function makeFormData(form, attachmentMode, file) {
 }
 
 function ReportForm({ report, onClose, onSaved }) {
-  const [reportDate, setReportDate] = useState(report?.reportDate ?? todayLocal())
+  const [reportDate, setReportDate] = useState(report?.reportDate ?? todayIso())
   const [points, setPoints] = useState(report?.reports?.length ? report.reports : [''])
   const [attachmentMode, setAttachmentMode] = useState(
     report?.attachment?.type === 'file' ? 'keep' : report?.attachment?.type === 'url' ? 'url' : 'none',

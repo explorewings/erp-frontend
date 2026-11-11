@@ -39,6 +39,30 @@ export async function fetchCrmEligibleUsers(token) {
   return readResponse(response, 'Unable to load users with CRM access.')
 }
 
+export async function fetchCrmPipelineUsers(token, pipelineId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/users`, {
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to load pipeline users.')
+}
+
+export async function addCrmPipelineUser(token, pipelineId, userId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/users`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ userId }),
+  })
+  return readResponse(response, 'Unable to add user.')
+}
+
+export async function removeCrmPipelineUser(token, pipelineId, userId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/users/${userId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to remove user.')
+}
+
 export async function createCrmStage(token, pipelineId, name) {
   const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/stages`, {
     method: 'POST',

@@ -2,14 +2,7 @@ import { useEffect, useState } from 'react'
 import { LuCalendarDays, LuFileText, LuLink2, LuPencil, LuSave, LuTrash2, LuUserRound } from 'react-icons/lu'
 import DrawerShell, { BUTTON, ErrorLine, FieldTile, Panel } from '../../calendar/components/drawer-shell.jsx'
 import { updateReportRemarks } from '../api.js'
-
-function formatDate(value) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-}
+import { formatDateLong } from '../lib/dates.js'
 
 function formatTimestamp(value) {
   return new Date(value).toLocaleString()
@@ -84,7 +77,7 @@ export default function ReportViewDrawer({
         <div>
           <p className="text-meta text-muted">Work report</p>
           <h2 id="report-view-title" className="truncate text-body-sm font-semibold text-ink">
-            {formatDate(report.reportDate)}
+            {formatDateLong(report.reportDate)}
           </h2>
         </div>
       }
@@ -107,7 +100,7 @@ export default function ReportViewDrawer({
         <Panel>
           <dl className="grid grid-cols-2 gap-3">
             <FieldTile label="Report date" icon={LuCalendarDays}>
-              {formatDate(report.reportDate)}
+              {formatDateLong(report.reportDate)}
             </FieldTile>
             <FieldTile label="Created by" icon={LuUserRound}>
               {report.createdByUsername || 'Unknown user'}
