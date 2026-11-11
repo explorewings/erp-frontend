@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { LuFileText, LuLink2, LuPlus } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
 import Loader from '../../appcomponents/loader.jsx'
 import Toast from '../../appcomponents/toast.jsx'
-import { createReport, deleteReport, fetchReports, updateReport } from '../api.js'
+import { createReport, deleteReport, fetchReport, fetchReports, updateReport } from '../api.js'
 import ReportDateFilter from '../components/report-date-filter.jsx'
 import ReportDrawer from '../components/report-drawer.jsx'
+import ReportSettingsMenu from '../components/report-settings-menu.jsx'
 import ReportUserFilter from '../components/report-user-filter.jsx'
 import ReportViewDrawer from '../components/report-view-drawer.jsx'
 import { formatDateShort, todayIso } from '../lib/dates.js'
@@ -41,6 +43,14 @@ function ReportCard({ report, onView }) {
           <time className="mt-1 block text-xs text-muted" dateTime={report.submittedAt}>
             {new Date(report.submittedAt).toLocaleString()}
           </time>
+          {report.editedAt ? (
+            <span
+              className="ml-1.5 text-xs italic text-muted"
+              title={`Edited ${new Date(report.editedAt).toLocaleString()}`}
+            >
+              Edited
+            </span>
+          ) : null}
           <p className="mt-1 truncate text-xs text-muted">
             {report.reports[0]}
           </p>
@@ -72,6 +82,10 @@ export default function Reports() {
   const [toast, setToast] = useState(null)
   const [submittedToday, setSubmittedToday] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
+  const [todayChecked, setTodayChecked] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const linkedReportId = Number(searchParams.get('report')) || null
+  const linkedNew = searchParams.get('new') === '1'
   const isElevated = user?.role === 'superadmin' || user?.role === 'superuser'
   const canSubmit = useMemo(
     () => ['staff', 'admin', 'superadmin', 'superuser'].includes(user?.role ?? ''),
@@ -140,10 +154,49 @@ export default function Reports() {
       .catch(() => {
         if (!cancelled) setSubmittedToday(false)
       })
+      .finally(() => {
+        if (!cancelled) setTodayChecked(true)
+      })
     return () => {
       cancelled = true
     }
   }, [token, user?.id, reloadTick])
+
+  // Notification links: ?report=<id> opens that report, ?new=1 opens the new-report form.
+  // The parameter is removed once handled so closing the drawer doesn't reopen it.
+  const clearLinkParam = (name) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      next.delete(name)
+      return next
+    }, { replace: true })
+  }
+
+  useEffect(() => {
+    if (!linkedReportId || !token) return undefined
+    let cancelled = false
+    fetchReport(token, linkedReportId)
+      .then((report) => {
+        if (!cancelled) setViewReport(report)
+      })
+      .catch((loadError) => {
+        if (!cancelled) setToast({ type: 'error', message: loadError?.message || 'Unable to open that report.' })
+      })
+      .finally(() => {
+        if (!cancelled) clearLinkParam('report')
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedReportId, token])
+
+  useEffect(() => {
+    if (!linkedNew || !todayChecked || !canSubmit) return
+    clearLinkParam('new')
+    openNewReport()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedNew, todayChecked, canSubmit])
 
   const saveRemarks = (updated) => {
     setReports((current) => current.map((item) => item.id === updated.id ? updated : item))
@@ -190,6 +243,7 @@ export default function Reports() {
             <LuPlus className="h-4 w-4" />
             <span className="sr-only sm:not-sr-only">New report</span>
           </button>
+          {isElevated ? <ReportSettingsMenu token={token} /> : null}
         </div>
       ) : null}
 

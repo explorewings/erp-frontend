@@ -51,3 +51,23 @@ export async function deleteReport(token, id) {
   })
   return readResponse(response, 'Unable to delete report.')
 }
+
+export async function fetchReport(token, id) {
+  const response = await fetch(`${API_BASE_URL}/reports/${id}`, { headers: headers(token) })
+  return readResponse(response, 'Unable to load report.')
+}
+
+export async function fetchReportSettings(token) {
+  const response = await fetch(`${API_BASE_URL}/reports/settings`, { headers: headers(token) })
+  return readResponse(response, 'Unable to load report settings.')
+}
+
+/** `dueTime` is `HH:MM` (24-hour) or null; `skipDays` uses 0 = Sunday … 6 = Saturday. */
+export async function updateReportSettings(token, settings) {
+  const response = await fetch(`${API_BASE_URL}/reports/settings`, {
+    method: 'PATCH',
+    headers: { ...headers(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  })
+  return readResponse(response, 'Unable to save report settings.')
+}

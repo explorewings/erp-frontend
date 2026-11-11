@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuBell, LuBellOff, LuCalendarClock, LuCheckCheck, LuListTodo, LuMegaphone, LuTriangleAlert, LuX } from 'react-icons/lu'
+import { LuBell, LuBellOff, LuCalendarClock, LuCheckCheck, LuClipboardX, LuListTodo, LuMegaphone, LuMessageSquareText, LuTriangleAlert, LuX } from 'react-icons/lu'
 import Loader from '../../appcomponents/loader.jsx'
 import { isTopDrawer, registerDrawer, useCloseOnBack } from '../../components/drawer-back.js'
 
@@ -20,11 +20,13 @@ function ago(value) {
   return dateFormat.format(new Date(value))
 }
 
-/** Icon per kind. Modules other than calendar fall back to the bell until they add theirs. */
+/** Icon per kind. Kinds without one here fall back to the bell. */
 function iconFor(item) {
   if (item.kind === 'task_failed') return { Icon: LuTriangleAlert, tone: 'text-danger-strong bg-danger-soft' }
   if (item.kind?.startsWith('task_')) return { Icon: LuListTodo, tone: 'text-accent-strong bg-[#fff5ef]' }
   if (item.kind?.startsWith('meeting_')) return { Icon: LuCalendarClock, tone: 'text-[#47637d] bg-[#eef2f6]' }
+  if (item.kind === 'report_missing') return { Icon: LuClipboardX, tone: 'text-danger-strong bg-danger-soft' }
+  if (item.kind?.startsWith('report_remarks_')) return { Icon: LuMessageSquareText, tone: 'text-accent-strong bg-[#fff5ef]' }
   if (item.kind?.startsWith('announcement_')) return { Icon: LuMegaphone, tone: 'text-[#8a6d1f] bg-[#f8f3e6]' }
   return { Icon: LuBell, tone: 'text-muted bg-ground' }
 }

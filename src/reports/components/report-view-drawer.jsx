@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { LuCalendarDays, LuFileText, LuLink2, LuPencil, LuSave, LuTrash2, LuUserRound } from 'react-icons/lu'
+import Alert from '../../appcomponents/alert.jsx'
 import DrawerShell, { BUTTON, ErrorLine, FieldTile, Panel } from '../../calendar/components/drawer-shell.jsx'
 import { updateReportRemarks } from '../api.js'
 import { formatDateLong } from '../lib/dates.js'
@@ -60,9 +61,9 @@ export default function ReportViewDrawer({
       await onDelete?.(report.id)
     } catch (deleteError) {
       setError(deleteError?.message || 'Unable to delete report.')
-      setConfirmDelete(false)
     } finally {
       setDeleting(false)
+      setConfirmDelete(false)
     }
   }
 
@@ -70,7 +71,8 @@ export default function ReportViewDrawer({
     <DrawerShell
       labelledBy="report-view-title"
       closeLabel="Close report details"
-      busy={busy}
+      // Keep Escape/scrim from closing the drawer while the delete alert is open.
+      busy={busy || confirmDelete || deleting}
       closeOnBack
       onClose={onClose}
       header={
@@ -107,6 +109,11 @@ export default function ReportViewDrawer({
             </FieldTile>
             <FieldTile label="Submitted" wide>
               {formatTimestamp(report.submittedAt)}
+              {report.editedAt ? (
+                <span className="ml-1.5 italic text-muted" title={`Edited ${formatTimestamp(report.editedAt)}`}>
+                  Edited
+                </span>
+              ) : null}
             </FieldTile>
           </dl>
         </Panel>
@@ -165,38 +172,15 @@ export default function ReportViewDrawer({
       {canEdit || canReview ? (
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-line bg-surface px-5 py-4">
           {canEdit ? (
-            confirmDelete ? (
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="text-meta text-ink">Delete this report?</span>
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(false)}
-                  disabled={deleting}
-                  className={BUTTON.neutral}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void confirmRemove()}
-                  disabled={deleting}
-                  className="inline-flex items-center gap-2 rounded-xs bg-danger px-3 py-2 text-meta font-medium text-white transition-colors hover:bg-danger-strong disabled:opacity-60"
-                >
-                  <LuTrash2 className="h-4 w-4" aria-hidden="true" />
-                  {deleting ? 'Deleting…' : 'Delete'}
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(true)}
-                disabled={busy || deleting}
-                className="inline-flex items-center gap-2 rounded-xs border border-danger/30 px-3 py-2 text-meta font-medium text-danger-strong transition-colors hover:bg-danger/10 disabled:opacity-50"
-              >
-                <LuTrash2 className="h-4 w-4" aria-hidden="true" />
-                Delete
-              </button>
-            )
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              disabled={busy || deleting}
+              className="inline-flex items-center gap-2 rounded-xs border border-danger/30 px-3 py-2 text-meta font-medium text-danger-strong transition-colors hover:bg-danger/10 disabled:opacity-50"
+            >
+              <LuTrash2 className="h-4 w-4" aria-hidden="true" />
+              Delete
+            </button>
           ) : (
             <span />
           )}
@@ -217,6 +201,18 @@ export default function ReportViewDrawer({
           ) : null}
         </footer>
       ) : null}
+
+      <Alert
+        open={confirmDelete}
+        title="Delete report?"
+        description={`The report for ${formatDateLong(report.reportDate)}${report.createdByUsername ? ` by ${report.createdByUsername}` : ''} will be permanently deleted${attachment?.type === 'file' ? ' along with its uploaded file' : ''}. This action cannot be undone.`}
+        confirmLabel="Delete report"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isConfirming={deleting}
+        onConfirm={() => void confirmRemove()}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </DrawerShell>
   )
 }
