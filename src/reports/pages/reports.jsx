@@ -4,13 +4,13 @@ import { LuFileText, LuLink2, LuPlus } from 'react-icons/lu'
 import { useAuth } from '../../authetication/auth-context.js'
 import Loader from '../../appcomponents/loader.jsx'
 import Toast from '../../appcomponents/toast.jsx'
-import { createReport, deleteReport, fetchReport, fetchReports, updateReport } from '../api.js'
+import { createReport, deleteReport, fetchReport, fetchReportSettings, fetchReports, updateReport } from '../api.js'
 import ReportDateFilter from '../components/report-date-filter.jsx'
 import ReportDrawer from '../components/report-drawer.jsx'
 import ReportSettingsMenu from '../components/report-settings-menu.jsx'
 import ReportUserFilter from '../components/report-user-filter.jsx'
 import ReportViewDrawer from '../components/report-view-drawer.jsx'
-import { formatDateShort, todayIso } from '../lib/dates.js'
+import { formatDateShort, parseIsoDate, todayIso } from '../lib/dates.js'
 import { isWithinEditWindow } from '../lib/report-rules.js'
 
 function canEditReport(report, user) {
@@ -83,6 +83,7 @@ export default function Reports() {
   const [submittedToday, setSubmittedToday] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
   const [todayChecked, setTodayChecked] = useState(false)
+  const [offDays, setOffDays] = useState([])
   const [searchParams, setSearchParams] = useSearchParams()
   const linkedReportId = Number(searchParams.get('report')) || null
   const linkedNew = searchParams.get('new') === '1'
@@ -130,6 +131,16 @@ export default function Reports() {
   }
 
   const openNewReport = () => {
+    // Same button-level gate as "one report per day". The server enforces both
+    // rules too, so a backdated off-day date picked in the form is still rejected there.
+    const todayWeekday = parseIsoDate(todayIso()).getDay()
+    if (offDays.includes(todayWeekday)) {
+      setToast({
+        type: 'error',
+        message: "Reports can't be submitted on off days.",
+      })
+      return
+    }
     if (submittedToday) {
       setToast({
         type: 'error',
@@ -198,6 +209,22 @@ export default function Reports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedNew, todayChecked, canSubmit])
 
+  // Off days (from Reports settings) gate the New report button; the server enforces them too.
+  useEffect(() => {
+    if (!token || !canSubmit) return undefined
+    let cancelled = false
+    fetchReportSettings(token)
+      .then((result) => {
+        if (!cancelled) setOffDays(Array.isArray(result?.skipDays) ? result.skipDays : [])
+      })
+      .catch(() => {
+        // Not fatal: the server still rejects off-day dates with a clear message.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token, canSubmit])
+
   const saveRemarks = (updated) => {
     setReports((current) => current.map((item) => item.id === updated.id ? updated : item))
     setViewReport(updated)
@@ -243,7 +270,7 @@ export default function Reports() {
             <LuPlus className="h-4 w-4" />
             <span className="sr-only sm:not-sr-only">New report</span>
           </button>
-          {isElevated ? <ReportSettingsMenu token={token} /> : null}
+          {isElevated ? <ReportSettingsMenu token={token} onSaved={(result) => setOffDays(Array.isArray(result?.skipDays) ? result.skipDays : [])} /> : null}
         </div>
       ) : null}
 

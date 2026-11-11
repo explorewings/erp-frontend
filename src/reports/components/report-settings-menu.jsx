@@ -20,9 +20,10 @@ function sameDays(a, b) {
 
 /**
  * Settings icon + dropdown (superadmin/superuser only): the daily due time for
- * reports and the weekdays with no "report not submitted" reminder.
+ * reports and the off days. Off days do both jobs: no report can be dated on
+ * them, and no "report not submitted" reminder is sent on them.
  */
-export default function ReportSettingsMenu({ token, disabled = false }) {
+export default function ReportSettingsMenu({ token, disabled = false, onSaved }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -91,6 +92,7 @@ export default function ReportSettingsMenu({ token, disabled = false }) {
       setSaved(result)
       setDueTime(result?.dueTime ?? '')
       setSkipDays(Array.isArray(result?.skipDays) ? result.skipDays : [])
+      onSaved?.(result)
       setNotice(result?.dueTime ? 'Settings saved.' : 'Saved. Reminders are off.')
     } catch (saveError) {
       setError(saveError?.message || 'Unable to save report settings.')
@@ -169,7 +171,7 @@ export default function ReportSettingsMenu({ token, disabled = false }) {
               </div>
 
               <fieldset disabled={saving || saved === null}>
-                <legend className="text-meta font-medium text-ink">Skip reminders on</legend>
+                <legend className="text-meta font-medium text-ink">Off days</legend>
                 <div className="mt-1.5 grid grid-cols-7 gap-1">
                   {DAYS.map((day) => {
                     const skipped = skipDays.includes(day.value)
@@ -179,7 +181,7 @@ export default function ReportSettingsMenu({ token, disabled = false }) {
                         type="button"
                         onClick={() => toggleDay(day.value)}
                         aria-pressed={skipped}
-                        aria-label={`${skipped ? 'Skipping' : 'Reminding on'} ${day.long}`}
+                        aria-label={`${day.long}: ${skipped ? 'off day' : 'working day'}`}
                         title={day.long}
                         className={`h-8 rounded-xs border text-label font-medium transition-colors disabled:opacity-60 ${
                           skipped
@@ -192,6 +194,9 @@ export default function ReportSettingsMenu({ token, disabled = false }) {
                     )
                   })}
                 </div>
+                <p className="mt-1.5 text-label text-muted">
+                  No reports can be dated on off days, and no reminders are sent on them.
+                </p>
               </fieldset>
 
               {error ? <p role="alert" className="text-meta text-danger-strong">{error}</p> : null}
