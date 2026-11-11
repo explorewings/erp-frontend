@@ -109,7 +109,7 @@ export default function ReportSettingsMenu({ token, disabled = false }) {
         aria-expanded={open}
         aria-label="Report settings"
         title="Report settings"
-        className={`inline-flex h-10 w-10 items-center justify-center rounded-xs border transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 disabled:opacity-60 ${
+        className={`inline-flex h-8 w-8 items-center justify-center rounded-xs border transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 disabled:opacity-60 sm:h-10 sm:w-10 ${
           open ? 'border-accent bg-accent/5 text-ink' : 'border-field bg-surface text-muted hover:bg-ground'
         }`}
       >

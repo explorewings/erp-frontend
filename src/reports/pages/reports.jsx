@@ -238,7 +238,7 @@ export default function Reports() {
             onClick={openNewReport}
             aria-label="New report"
             title="New report"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xs bg-accent text-sm font-medium text-white hover:bg-accent-strong sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2.5"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-xs bg-accent text-sm font-medium text-white hover:bg-accent-strong sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2.5"
           >
             <LuPlus className="h-4 w-4" />
             <span className="sr-only sm:not-sr-only">New report</span>

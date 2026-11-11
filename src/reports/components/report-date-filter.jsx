@@ -140,7 +140,7 @@ export default function ReportDateFilter({ value, onChange, disabled = false }) 
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={value ? `Reports for ${formatLabel(value)}` : 'Filter reports by date'}
-        className={`inline-flex h-10 items-center gap-2 rounded-xs border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 disabled:opacity-60 ${
+        className={`inline-flex h-8 items-center gap-2 rounded-xs border px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/20 disabled:opacity-60 sm:h-10 sm:px-3 ${
           value
             ? 'border-accent bg-accent/5 text-ink'
             : 'border-field bg-surface text-muted hover:bg-ground'

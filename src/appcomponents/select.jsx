@@ -32,7 +32,7 @@ export default function Select({ value, onChange, options = [], placeholder = 'S
         aria-expanded={open}
         aria-label={placeholder || 'Filter'}
         className={`flex items-center justify-center rounded-xs border outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15 ${
-          iconOnly ? 'h-10 w-10' : 'w-full gap-2 px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)]'
+          iconOnly ? 'h-8 w-8 sm:h-10 sm:w-10' : 'w-full gap-2 px-3.5 py-2.5 text-body-sm text-[var(--ew-ink)]'
         }`}
         style={{ borderColor: 'transparent', background: '#cc785c' }}
       >

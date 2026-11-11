@@ -78,16 +78,16 @@ function Packages() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search packages..."
-          className="w-full rounded-xs border px-3.5 py-2.5 text-body-sm sm:w-64 text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
+          className="h-8 w-full max-w-[52%] rounded-xs border px-3 text-body-sm sm:h-10 sm:max-w-none sm:w-64 sm:px-3.5 text-[var(--ew-ink)] outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/15"
           style={{ borderColor: 'var(--ew-field-line)', background: 'var(--ew-surface)' }}
         />
 
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setIsCreateOpen(true)}
             aria-label="Create package"
-            className="flex h-10 w-10 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e]"
+            className="flex h-8 w-8 items-center justify-center rounded-xs bg-[#cc785c] text-white transition-colors hover:bg-[#b36a4e] sm:h-10 sm:w-10"
           >
             <LuPlus className="h-4 w-4" />
           </button>
