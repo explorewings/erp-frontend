@@ -13,6 +13,7 @@ export default function ReportUserFilter({ value, selectedUser, token, onChange,
   const [results, setResults] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [searchError, setSearchError] = useState('')
   const [picked, setPicked] = useState(null)
   const containerRef = useRef(null)
   const panelRef = useRef(null)
