@@ -46,21 +46,24 @@ export async function fetchCrmPipelineUsers(token, pipelineId) {
   return readResponse(response, 'Unable to load pipeline users.')
 }
 
-export async function addCrmPipelineUser(token, pipelineId, userId) {
-  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/users`, {
+/** What saving this member list would change: added/removed users, deals that would be unassigned. */
+export async function previewCrmPipelineUsers(token, pipelineId, userIds) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/users/preview`, {
     method: 'POST',
     headers: authHeaders(token, true),
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({ userIds }),
   })
-  return readResponse(response, 'Unable to add user.')
+  return readResponse(response, 'Unable to check the changes.')
 }
 
-export async function removeCrmPipelineUser(token, pipelineId, userId) {
-  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/users/${userId}`, {
-    method: 'DELETE',
-    headers: authHeaders(token),
+/** Replaces the pipeline's member list. `confirmUnassign` is needed when removed users own deals. */
+export async function saveCrmPipelineUsers(token, pipelineId, userIds, confirmUnassign = false) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/users`, {
+    method: 'PUT',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ userIds, confirmUnassign }),
   })
-  return readResponse(response, 'Unable to remove user.')
+  return readResponse(response, 'Unable to save pipeline access.')
 }
 
 export async function createCrmStage(token, pipelineId, name) {

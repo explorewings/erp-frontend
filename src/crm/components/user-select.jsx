@@ -7,7 +7,7 @@ const SEARCH_LIMIT = 20
 
 /**
  * System-style user dropdown with a server-side search bar.
- * `value` is the selected user id as a string; `onChange` receives the new id string.
+ * `value` is the selected user id as a string; `onChange` receives the new id string and the user object.
  * `excludedIds` removes users that must not be offered (e.g. current members).
  */
 export default function UserSelect({
@@ -102,7 +102,7 @@ export default function UserSelect({
 
   const choose = (user) => {
     if (!user) return
-    onChange?.(String(user.id))
+    onChange?.(String(user.id), user)
     closeMenu()
   }
 

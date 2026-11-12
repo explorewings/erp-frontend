@@ -13,6 +13,8 @@ export default function Alert({
   confirmDisabled = false,
   progress,
   feedback,
+  confirmingLabel = 'Deleting...',
+  children,
   onConfirm,
   onCancel,
 }) {
@@ -79,6 +81,8 @@ export default function Alert({
           </div>
         </div>
 
+        {children ? <div className="mt-4">{children}</div> : null}
+
         {(progress || feedback) && (
           <div className="mt-5">
             {progress && (
@@ -141,7 +145,7 @@ export default function Alert({
               disabled={isConfirming || confirmDisabled}
               className={`rounded-xs px-4 py-2 text-body-sm font-medium text-white transition-colors disabled:opacity-60 ${confirmBg} ${confirmHover}`}
             >
-              {isConfirming ? 'Deleting...' : confirmLabel}
+              {isConfirming ? confirmingLabel : confirmLabel}
             </button>
           </div>
         )}

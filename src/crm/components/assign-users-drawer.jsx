@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuPencil, LuUsers, LuX } from 'react-icons/lu'
+import { LuPencil, LuRotateCcw, LuUsers, LuX } from 'react-icons/lu'
+import Alert from '../../appcomponents/alert.jsx'
 import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
-import Loader from '../../appcomponents/loader.jsx'
 import Tooltip from '../../appcomponents/tooltip.jsx'
 import {
-  addCrmPipelineUser,
   fetchCrmPipelineUsers,
-  removeCrmPipelineUser,
+  previewCrmPipelineUsers,
+  saveCrmPipelineUsers,
 } from '../api.js'
 import DealAssignPanel from './deal-assign-panel.jsx'
 import InlineError from './inline-error.jsx'
@@ -20,6 +20,8 @@ const TABS = [
   { id: 'pipeline-access', label: 'Pipeline access' },
   { id: 'deal-assign', label: 'Deal assign' },
 ]
+
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
 
 export default function AssignUsersDrawer({
   open,
@@ -61,8 +63,11 @@ function AssignUsersDrawerContent({
   const [membersError, setMembersError] = useState('')
   const [membersReloadTick, setMembersReloadTick] = useState(0)
   const [isEditingAccess, setIsEditingAccess] = useState(false)
-  const [isAddingUser, setIsAddingUser] = useState(false)
-  const [removingUserId, setRemovingUserId] = useState(null)
+  // Staged edits: nothing reaches the server until Save.
+  const [addedUsers, setAddedUsers] = useState([])
+  const [removedIds, setRemovedIds] = useState([])
+  const [isSaving, setIsSaving] = useState(false)
+  const [pendingSave, setPendingSave] = useState(null)
   const [accessError, setAccessError] = useState('')
   const [accessNotice, setAccessNotice] = useState('')
 
@@ -72,6 +77,14 @@ function AssignUsersDrawerContent({
 
   const canEditAccess = isSuperRole(currentUser?.role)
   const memberIds = members.map((member) => member.id)
+  const hasChanges = addedUsers.length > 0 || removedIds.length > 0
+  const desiredIds = [
+    ...memberIds.filter((id) => !removedIds.includes(id)),
+    ...addedUsers.map((added) => added.id),
+  ]
+  const listedUsers = isEditingAccess
+    ? [...members, ...addedUsers.map((added) => ({ ...added, isNew: true }))]
+    : members
 
   useEffect(() => {
     onCloseRef.current = onClose
@@ -139,55 +152,105 @@ function AssignUsersDrawerContent({
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
+  const resetDraft = () => {
+    setAddedUsers([])
+    setRemovedIds([])
+    setPendingSave(null)
+  }
+
   const startEditingAccess = () => {
+    resetDraft()
     setIsEditingAccess(true)
     setAccessError('')
     setAccessNotice('')
   }
 
-  const stopEditingAccess = () => {
+  const cancelEditingAccess = () => {
+    resetDraft()
     setIsEditingAccess(false)
     setAccessError('')
-    setAccessNotice('')
   }
 
-  const handleAddUser = async (userId) => {
-    if (!userId || isAddingUser) return
-    setIsAddingUser(true)
+  const handleAddUser = (userId, picked) => {
+    if (!userId) return
+    if (removedIds.includes(userId)) {
+      // Picking a user who is staged for removal just keeps them.
+      setRemovedIds((ids) => ids.filter((id) => id !== userId))
+      return
+    }
+    if (memberIds.includes(userId) || addedUsers.some((added) => added.id === userId)) return
+    setAddedUsers((list) => [
+      ...list,
+      { id: userId, username: picked?.username, role: picked?.role, status: picked?.status },
+    ])
     setAccessError('')
-    setAccessNotice('')
+  }
+
+  const toggleRemove = (member) => {
+    if (member.isNew) {
+      setAddedUsers((list) => list.filter((added) => added.id !== member.id))
+      return
+    }
+    setRemovedIds((ids) =>
+      ids.includes(member.id) ? ids.filter((id) => id !== member.id) : [...ids, member.id],
+    )
+    setAccessError('')
+  }
+
+  const commitSave = async (confirmUnassign) => {
+    setIsSaving(true)
+    setAccessError('')
     try {
-      const added = await addCrmPipelineUser(token, pipeline.id, userId)
-      const next = [...members, added].sort((a, b) =>
-        String(a.username || '').localeCompare(String(b.username || '')),
-      )
+      const result = await saveCrmPipelineUsers(token, pipeline.id, desiredIds, confirmUnassign)
+      const next = Array.isArray(result.members) ? result.members : []
       setMembers(next)
-      setAccessNotice(`Added ${added.username || 'user'}.`)
+      resetDraft()
+      setIsEditingAccess(false)
+
+      const parts = []
+      if (result.addedCount) parts.push(`${plural(result.addedCount, 'user')} added`)
+      if (result.removedCount) parts.push(`${plural(result.removedCount, 'user')} removed`)
+      if (result.unassignedCount) parts.push(`${plural(result.unassignedCount, 'deal')} unassigned`)
+      if (result.ruleChangedTo) parts.push('deal assignment rule switched to Manual')
+      setAccessNotice(parts.length ? `Saved: ${parts.join(', ')}.` : 'Saved.')
+
       onAccessChangeRef.current?.(pipeline.id, next.map((member) => member.id))
+      if (result.ruleChangedTo) onRuleChange?.(pipeline.id, result.ruleChangedTo)
+      if (result.unassignedCount) onDealsChange?.()
     } catch (err) {
-      setAccessError(err?.message || 'Unable to add user.')
+      setAccessError(err?.message || 'Unable to save pipeline access.')
+      setPendingSave(null)
     } finally {
-      setIsAddingUser(false)
+      setIsSaving(false)
     }
   }
 
-  const handleRemoveUser = async (member) => {
-    if (removingUserId || isAddingUser) return
-    setRemovingUserId(member.id)
+  const handleSave = async () => {
+    if (isSaving || !hasChanges) return
+    if (removedIds.length === 0) {
+      await commitSave(false)
+      return
+    }
+    // Before saving removals, check whether they would leave deals without an owner.
+    setIsSaving(true)
     setAccessError('')
-    setAccessNotice('')
+    let preview
     try {
-      await removeCrmPipelineUser(token, pipeline.id, member.id)
-      const next = members.filter((candidate) => candidate.id !== member.id)
-      setMembers(next)
-      setAccessNotice(`Removed ${member.username || 'user'}.`)
-      onAccessChangeRef.current?.(pipeline.id, next.map((remaining) => remaining.id))
+      preview = await previewCrmPipelineUsers(token, pipeline.id, desiredIds)
     } catch (err) {
-      setAccessError(err?.message || 'Unable to remove user.')
-    } finally {
-      setRemovingUserId(null)
+      setAccessError(err?.message || 'Unable to check the changes.')
+      setIsSaving(false)
+      return
+    }
+    setIsSaving(false)
+    if (preview.dealsToUnassign > 0 || preview.singleUserRemoved) {
+      setPendingSave(preview)
+    } else {
+      await commitSave(false)
     }
   }
+
+  const ownersLosingDeals = pendingSave?.removed?.filter((row) => row.dealCount > 0) ?? []
 
   return createPortal(
     <>
@@ -247,16 +310,15 @@ function AssignUsersDrawerContent({
                     These users can access this pipeline and its deals.
                   </p>
                 </div>
-                {canEditAccess ? (
+                {canEditAccess && !isEditingAccess ? (
                   <button
                     type="button"
-                    onClick={isEditingAccess ? stopEditingAccess : startEditingAccess}
-                    disabled={isAddingUser || Boolean(removingUserId)}
-                    aria-pressed={isEditingAccess}
+                    onClick={startEditingAccess}
+                    disabled={isLoadingMembers || Boolean(membersError)}
                     className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xs border border-[var(--ew-line)] bg-ground px-3 text-xs font-medium text-[var(--ew-ink)] transition-colors hover:bg-ground/70 disabled:opacity-60"
                   >
-                    {isEditingAccess ? <LuX className="h-3.5 w-3.5" aria-hidden="true" /> : <LuPencil className="h-3.5 w-3.5" aria-hidden="true" />}
-                    {isEditingAccess ? 'Done' : 'Edit'}
+                    <LuPencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    Edit
                   </button>
                 ) : null}
               </div>
@@ -265,16 +327,16 @@ function AssignUsersDrawerContent({
                 <div className="mb-3 rounded-xs border p-3" style={{ borderColor: 'var(--ew-line)' }}>
                   <p className="text-xs font-medium text-[var(--ew-ink)]">Add user</p>
                   <p className="mt-1 text-xs text-[var(--ew-muted)]">
-                    Pick a user to grant access to this pipeline.
+                    Pick users to add and mark the ones who should lose access. Nothing changes until you save.
                   </p>
                   <div className="mt-2">
                     <UserSelect
                       token={token}
                       value=""
                       onChange={handleAddUser}
-                      excludedIds={memberIds}
-                      disabled={isAddingUser}
-                      placeholder={isAddingUser ? 'Adding...' : 'Select a user'}
+                      excludedIds={desiredIds.map(String)}
+                      disabled={isSaving}
+                      placeholder="Select a user"
                     />
                   </div>
                 </div>
@@ -303,30 +365,46 @@ function AssignUsersDrawerContent({
                 <p role="status" className="py-6 text-center text-sm text-[var(--ew-muted)]">
                   Loading users...
                 </p>
-              ) : members.length === 0 ? (
+              ) : listedUsers.length === 0 ? (
                 <p className="rounded-xs border border-dashed p-4 text-sm text-[var(--ew-muted)]">
                   No users are assigned to this pipeline.
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {members.map((member) => {
+                  {listedUsers.map((member) => {
                     const isCreator = member.id === pipeline.createdBy
                     const isSuper = isSuperRole(member.role)
-                    const removable = isEditingAccess && !isCreator && !isSuper
+                    const removable = isEditingAccess && !isCreator && (!isSuper || member.isNew)
+                    const isRemoved = removedIds.includes(member.id)
+                    const name = member.username || 'user'
                     return (
                       <li key={member.id}>
                         <Tooltip
-                          content={isSuper ? 'Superadmin has full access' : null}
+                          content={isSuper && !member.isNew ? 'Superadmin has full access' : null}
                           className="block w-full"
                         >
                           <div
-                            className="flex items-center justify-between gap-3 rounded-xs border px-3 py-2"
-                            style={{ borderColor: 'var(--ew-line)' }}
+                            className={`flex items-center justify-between gap-3 rounded-xs border px-3 py-2 ${
+                              isRemoved ? 'bg-danger-soft/40' : ''
+                            }`}
+                            style={{ borderColor: member.isNew ? '#cc785c' : 'var(--ew-line)' }}
                           >
-                            <span className="min-w-0 truncate text-sm text-[var(--ew-ink)]">
-                              {member.username || 'User unavailable'}
+                            <span className="min-w-0 truncate text-sm">
+                              <span
+                                className={
+                                  isRemoved ? 'text-[var(--ew-muted)] line-through' : 'text-[var(--ew-ink)]'
+                                }
+                              >
+                                {member.username || 'User unavailable'}
+                              </span>
                               {isCreator ? (
                                 <span className="ml-2 text-xs text-[var(--ew-muted)]">Pipeline creator</span>
+                              ) : null}
+                              {member.isNew ? (
+                                <span className="ml-2 text-xs font-medium text-[#b76c4f]">New</span>
+                              ) : null}
+                              {isRemoved ? (
+                                <span className="ml-2 text-xs text-danger">Will be removed</span>
                               ) : null}
                             </span>
                             <div className="flex shrink-0 items-center gap-2">
@@ -337,13 +415,15 @@ function AssignUsersDrawerContent({
                               {removable ? (
                                 <button
                                   type="button"
-                                  onClick={() => handleRemoveUser(member)}
-                                  disabled={Boolean(removingUserId) || isAddingUser}
-                                  aria-label={`Remove ${member.username || 'user'} from this pipeline`}
+                                  onClick={() => toggleRemove(member)}
+                                  disabled={isSaving}
+                                  aria-label={
+                                    isRemoved ? `Keep ${name} in this pipeline` : `Remove ${name} from this pipeline`
+                                  }
                                   className="flex h-6 w-6 items-center justify-center rounded-xs border border-[var(--ew-line)] text-muted transition-colors hover:border-danger hover:text-danger disabled:opacity-60"
                                 >
-                                  {removingUserId === member.id ? (
-                                    <Loader size={0.7} />
+                                  {isRemoved ? (
+                                    <LuRotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                                   ) : (
                                     <LuX className="h-3.5 w-3.5" aria-hidden="true" />
                                   )}
@@ -357,6 +437,7 @@ function AssignUsersDrawerContent({
                   })}
                 </ul>
               )}
+
             </section>
 
             <section
@@ -376,8 +457,77 @@ function AssignUsersDrawerContent({
               />
             </section>
           </div>
+
+          {isEditingAccess && activeTab === 'pipeline-access' ? (
+            <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--ew-line)] bg-[var(--ew-surface)] px-5 py-3">
+              <p className="min-w-0 text-xs text-[var(--ew-muted)]">
+                {hasChanges
+                  ? [
+                      addedUsers.length ? `${addedUsers.length} to add` : null,
+                      removedIds.length ? `${removedIds.length} to remove` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : 'No changes yet'}
+              </p>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={cancelEditingAccess}
+                  disabled={isSaving}
+                  className="h-9 rounded-xs border border-[var(--ew-line)] bg-ground px-4 text-sm font-medium text-[var(--ew-muted)] transition-colors hover:bg-ground/70 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={isSaving || !hasChanges}
+                  className="h-9 rounded-xs bg-[#cc785c] px-4 text-sm font-medium text-white transition-colors hover:bg-[#b76c4f] disabled:opacity-60"
+                >
+                  {isSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </footer>
+          ) : null}
         </aside>
       </div>
+
+      <Alert
+        open={Boolean(pendingSave)}
+        title={pendingSave?.dealsToUnassign > 0 ? 'Deals will be unassigned' : 'Assignment rule will change'}
+        description={
+          pendingSave?.dealsToUnassign > 0
+            ? `The users you are removing own ${plural(pendingSave.dealsToUnassign, 'deal')} in this pipeline. Saving will unassign them; you can reassign them from Deal assign or the deal drawer.`
+            : 'Saving changes how new deals in this pipeline are assigned.'
+        }
+        confirmLabel={pendingSave?.dealsToUnassign > 0 ? 'Unassign and save' : 'Save'}
+        confirmingLabel="Saving..."
+        isConfirming={isSaving}
+        onConfirm={() => commitSave(true)}
+        onCancel={() => setPendingSave(null)}
+      >
+        {ownersLosingDeals.length > 0 ? (
+          <ul
+            className="max-h-48 space-y-1 overflow-y-auto rounded-xs border p-2"
+            style={{ borderColor: 'var(--ew-line)' }}
+          >
+            {ownersLosingDeals.map((row) => (
+              <li key={row.userId} className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate text-[var(--ew-ink)]">{row.username || 'User unavailable'}</span>
+                <span className="shrink-0 text-xs text-[var(--ew-muted)]">{plural(row.dealCount, 'deal')}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {pendingSave?.singleUserRemoved ? (
+          <p className="mt-3 text-xs text-[var(--ew-muted)]">
+            {pendingSave.singleUserRemoved.username || 'This user'} receives every new deal (Single user rule). The
+            rule will switch to <span className="font-medium text-[var(--ew-ink)]">Manual</span>, so new deals stay
+            unassigned until you choose another rule.
+          </p>
+        ) : null}
+      </Alert>
     </>,
     document.body,
   )
