@@ -180,3 +180,30 @@ export async function deleteCrmDeal(token, dealId) {
   })
   return readResponse(response, 'Unable to delete deal.')
 }
+
+/** Saved assignment rule, deal totals and per-user load of a pipeline. */
+export async function fetchCrmAssignmentOverview(token, pipelineId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/assignment`, {
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to load deal assignment.')
+}
+
+/** Saves the pipeline's rule: round_robin | single_user (needs userId) | creator | manual. */
+export async function saveCrmAssignmentRule(token, pipelineId, method, userId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/deal-assignment`, {
+    method: 'PATCH',
+    headers: authHeaders(token, true),
+    body: JSON.stringify(method === 'single_user' ? { method, userId } : { method }),
+  })
+  return readResponse(response, 'Unable to save the assignment rule.')
+}
+
+/** Assigns the next chunk (≤ 100) of unassigned deals by the saved rule. */
+export async function distributeCrmUnassignedDeals(token, pipelineId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/assignments/distribute`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to assign deals.')
+}

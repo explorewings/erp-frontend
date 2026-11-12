@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  LuArrowLeftRight,
-  LuCircleUserRound,
-  LuPencil,
-  LuUsers,
-  LuX,
-} from 'react-icons/lu'
+import { LuPencil, LuUsers, LuX } from 'react-icons/lu'
 import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
 import Loader from '../../appcomponents/loader.jsx'
 import Tooltip from '../../appcomponents/tooltip.jsx'
@@ -15,6 +9,7 @@ import {
   fetchCrmPipelineUsers,
   removeCrmPipelineUser,
 } from '../api.js'
+import DealAssignPanel from './deal-assign-panel.jsx'
 import InlineError from './inline-error.jsx'
 import PipelineTag from './pipeline-tag.jsx'
 import SlidingTabs from './sliding-tabs.jsx'
@@ -26,28 +21,16 @@ const TABS = [
   { id: 'deal-assign', label: 'Deal assign' },
 ]
 
-const ASSIGNMENT_METHODS = [
-  {
-    id: 'round-robin',
-    title: 'Round robin',
-    description: 'Assign each new deal to the next available user in turn.',
-    Icon: LuArrowLeftRight,
-  },
-  {
-    id: 'creator-manual',
-    title: 'Creator + manual',
-    description: 'Assign the deal to the person who added it, then allow manual reassignment.',
-    Icon: LuCircleUserRound,
-  },
-  {
-    id: 'least-loaded',
-    title: 'Least loaded',
-    description: 'Assign each new deal to the eligible user with the fewest deals.',
-    Icon: LuUsers,
-  },
-]
-
-export default function AssignUsersDrawer({ open, token, pipeline, user, onClose, onAccessChange }) {
+export default function AssignUsersDrawer({
+  open,
+  token,
+  pipeline,
+  user,
+  onClose,
+  onAccessChange,
+  onRuleChange,
+  onDealsChange,
+}) {
   if (!open || !pipeline) return null
   return (
     <AssignUsersDrawerContent
@@ -56,11 +39,21 @@ export default function AssignUsersDrawer({ open, token, pipeline, user, onClose
       currentUser={user}
       onClose={onClose}
       onAccessChange={onAccessChange}
+      onRuleChange={onRuleChange}
+      onDealsChange={onDealsChange}
     />
   )
 }
 
-function AssignUsersDrawerContent({ token, pipeline, currentUser, onClose, onAccessChange }) {
+function AssignUsersDrawerContent({
+  token,
+  pipeline,
+  currentUser,
+  onClose,
+  onAccessChange,
+  onRuleChange,
+  onDealsChange,
+}) {
   const [visible, setVisible] = useState(false)
   const [activeTab, setActiveTab] = useState(TABS[0].id)
   const [members, setMembers] = useState([])
@@ -372,29 +365,15 @@ function AssignUsersDrawerContent({ token, pipeline, currentUser, onClose, onAcc
               aria-labelledby="assign-users-tab-deal-assign"
               hidden={activeTab !== 'deal-assign'}
             >
-              <div className="mb-3">
-                <h3 className="text-sm font-semibold text-[var(--ew-ink)]">Deal assignment method</h3>
-                <p className="mt-1 text-xs text-[var(--ew-muted)]">
-                  Choose how deals should be assigned to users with pipeline access.
-                </p>
-              </div>
-              <div className="space-y-3">
-                {ASSIGNMENT_METHODS.map(({ id, title, description, Icon }) => (
-                  <article
-                    key={id}
-                    className="flex items-start gap-3 rounded-control border p-4"
-                    style={{ borderColor: 'var(--ew-line)', background: 'var(--ew-surface)' }}
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xs bg-[#cc785c]/10 text-[#b76c4f]">
-                      <Icon className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-semibold text-[var(--ew-ink)]">{title}</h4>
-                      <p className="mt-1 text-xs leading-relaxed text-[var(--ew-muted)]">{description}</p>
-                    </div>
-                  </article>
-                ))}
-              </div>
+              <DealAssignPanel
+                refreshKey={memberIds.join(',')}
+                token={token}
+                pipelineId={pipeline.id}
+                canEdit={canEditAccess}
+                isActive={activeTab === 'deal-assign'}
+                onRuleChange={(method) => onRuleChange?.(pipeline.id, method)}
+                onDealsChange={onDealsChange}
+              />
             </section>
           </div>
         </aside>

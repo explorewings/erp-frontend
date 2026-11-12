@@ -433,6 +433,8 @@ export default function Crm() {
           pipeline={selectedPipeline}
           onClose={() => setIsAssignUsersDrawerOpen(false)}
           onAccessChange={(pipelineId, userIds) => updatePipeline(pipelineId, { allowedUserIds: userIds })}
+          onRuleChange={(pipelineId, method) => updatePipeline(pipelineId, { dealAssignmentMethod: method })}
+          onDealsChange={reloadDeals}
         />
         <ManagePipelineDrawer
           open={pipelineDrawerTab !== null}
