@@ -22,6 +22,9 @@ const RULE_LABELS = {
   manual: 'Manual',
 }
 
+/** Rules that assign existing deals in bulk; only one may own deals at a time. */
+const BULK_SOURCES = ['round_robin', 'single_user']
+
 const CARDS = [
   {
     id: 'round_robin',
@@ -56,6 +59,7 @@ export default function DealAssignPanel({
   refreshKey,
   onRuleChange,
   onDealsChange,
+  onBusyChange,
 }) {
   const [overview, setOverview] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -84,6 +88,16 @@ export default function DealAssignPanel({
   }, [])
 
   const isBusy = Boolean(savingMethod) || run?.status === 'running' || unassign?.status === 'running'
+
+  // Lets the drawer refuse to close while an action is running.
+  const onBusyChangeRef = useRef(onBusyChange)
+  useEffect(() => {
+    onBusyChangeRef.current = onBusyChange
+  })
+  useEffect(() => {
+    onBusyChangeRef.current?.(isBusy)
+  }, [isBusy])
+  useEffect(() => () => onBusyChangeRef.current?.(false), [])
 
   useEffect(() => {
     if (!isActive) return undefined
@@ -190,7 +204,9 @@ export default function DealAssignPanel({
         if (result.remaining === 0) break
         if (result.assignedCount === 0) {
           throw new Error(
-            `${plural(result.remaining, 'deal')} could not be assigned because no eligible user is available.`,
+            method === 'single_user'
+              ? `${saved?.singleUsername ?? 'The chosen user'} can no longer receive deals. Choose someone else.`
+              : `${plural(result.remaining, 'deal')} could not be assigned because no eligible user is available.`,
           )
         }
       }
@@ -286,6 +302,15 @@ export default function DealAssignPanel({
   const roundRobinAssigned = overview.assignedBySource?.round_robin ?? 0
   const isSingleActive = method === 'single_user'
   const activeCardId = CARDS.find((card) => card.methods.includes(method))?.id ?? CARDS[0].id
+  // One bulk rule at a time: a card is locked while another bulk rule still owns deals.
+  const lockOf = (card) => {
+    const source = BULK_SOURCES.find(
+      (candidate) => !card.methods.includes(candidate) && (overview.assignedBySource?.[candidate] ?? 0) > 0,
+    )
+    return source ? { source, count: overview.assignedBySource[source] } : null
+  }
+  const selectedCardId =
+    expanded && !lockOf(CARDS.find((card) => card.id === expanded) ?? CARDS[0]) ? expanded : activeCardId
 
   const roundRobinButton =
     !canEdit || users.length === 0
@@ -324,8 +349,9 @@ export default function DealAssignPanel({
       <div className="space-y-3" role="radiogroup" aria-label="Deal assignment rule">
         {CARDS.map((card) => {
           const isCurrent = card.methods.includes(method)
+          const lock = isCurrent ? null : lockOf(card)
           // One rule at a time: the selected card is open and usable, the others are disabled.
-          const isOpen = (expanded ?? activeCardId) === card.id
+          const isOpen = selectedCardId === card.id
           return (
             <article
               key={card.id}
@@ -340,7 +366,7 @@ export default function DealAssignPanel({
                 role="radio"
                 aria-checked={isOpen}
                 onClick={() => setExpanded(card.id)}
-                disabled={isBusy && !isOpen}
+                disabled={Boolean(lock) || (isBusy && !isOpen)}
                 aria-controls={`deal-assign-${card.id}`}
                 className="flex w-full items-start gap-3 p-4 text-left disabled:cursor-not-allowed"
               >
@@ -366,6 +392,25 @@ export default function DealAssignPanel({
                   <span className="mt-1 block text-xs leading-relaxed text-[var(--ew-muted)]">{card.description}</span>
                 </span>
               </button>
+
+              {lock ? (
+                <p className="-mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 pb-3 pl-11 text-xs text-[var(--ew-muted)]">
+                  <span>
+                    Locked: {plural(lock.count, 'deal')} {lock.count === 1 ? 'was' : 'were'} assigned by{' '}
+                    {RULE_LABELS[lock.source].toLowerCase()}.
+                  </span>
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      onClick={() => openUnassign(lock.source)}
+                      disabled={isBusy}
+                      className="font-medium text-[#b76c4f] underline underline-offset-2 hover:text-[#cc785c] disabled:opacity-60"
+                    >
+                      Revert {RULE_LABELS[lock.source].toLowerCase()}
+                    </button>
+                  ) : null}
+                </p>
+              ) : null}
 
               {isOpen ? (
                 <div id={`deal-assign-${card.id}`} className="border-t px-4 pb-4 pt-3" style={{ borderColor: 'var(--ew-line)' }}>
@@ -634,7 +679,8 @@ function DistributeSection({
       .filter((owner) => !users.some((user) => user.userId === owner.userId))
       .map((owner) => ({ userId: owner.userId, username: owner.username, dealCount: owner.dealCount, eligible: false })),
   ]
-  const maxLoad = Math.max(1, ...rows.map((row) => row.dealCount))
+  // Rows show only the deals round robin gave each user — exactly what their Unassign removes.
+  const maxLoad = Math.max(1, ...rows.map((row) => ownedBy.get(row.userId) ?? 0))
 
   return (
     <div>
@@ -657,11 +703,11 @@ function DistributeSection({
                   <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-pill bg-[var(--ew-line)]">
                     <span
                       className="block h-full rounded-pill bg-[#cc785c]/70"
-                      style={{ width: `${(row.dealCount / maxLoad) * 100}%` }}
+                      style={{ width: `${((ownedBy.get(row.userId) ?? 0) / maxLoad) * 100}%` }}
                     />
                   </span>
                   <span className="w-14 shrink-0 text-right text-xs tabular-nums text-[var(--ew-muted)]">
-                    {plural(row.dealCount, 'deal')}
+                    {plural(ownedBy.get(row.userId) ?? 0, 'deal')}
                   </span>
                   {canEdit ? (
                     <span className="flex w-14 shrink-0 justify-end">
@@ -930,7 +976,7 @@ function SingleUserSection({
         ) : null}
       </section>
 
-      {hasTarget && unassigned > 0 ? (
+      {hasTarget && targetEligible && unassigned > 0 ? (
         <section className="border-t pt-3" style={{ borderColor: 'var(--ew-line)' }} aria-label="Unassigned deals">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ew-muted)]">
             Unassigned deals · <span className="tabular-nums">{unassigned}</span>

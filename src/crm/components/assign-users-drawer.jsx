@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LuPencil, LuRotateCcw, LuUsers, LuX } from 'react-icons/lu'
 import Alert from '../../appcomponents/alert.jsx'
+import Toast from '../../appcomponents/toast.jsx'
 import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
 import Tooltip from '../../appcomponents/tooltip.jsx'
 import {
@@ -70,6 +71,9 @@ function AssignUsersDrawerContent({
   const [pendingSave, setPendingSave] = useState(null)
   const [accessError, setAccessError] = useState('')
   const [accessNotice, setAccessNotice] = useState('')
+  // True while the Deal assign tab is saving, assigning or unassigning.
+  const [isPanelBusy, setIsPanelBusy] = useState(false)
+  const [busyToast, setBusyToast] = useState('')
 
   const onCloseRef = useRef(onClose)
   const ignorePopRef = useRef(false)
@@ -118,7 +122,19 @@ function AssignUsersDrawerContent({
     }
   }, [token, pipeline.id, membersReloadTick])
 
+  // Closing mid-action would leave deals half assigned or unassigned.
+  const isBusy = isSaving || isPanelBusy
+  const isBusyRef = useRef(isBusy)
+  useEffect(() => {
+    isBusyRef.current = isBusy
+  }, [isBusy])
+  const warnBusy = () => setBusyToast('Please wait until the action completes.')
+
   const closeDrawer = () => {
+    if (isBusyRef.current) {
+      warnBusy()
+      return
+    }
     ignorePopRef.current = true
     onCloseRef.current?.()
     if (window.history.state?.overlay) {
@@ -143,6 +159,12 @@ function AssignUsersDrawerContent({
     const onPopState = () => {
       if (ignorePopRef.current) {
         ignorePopRef.current = false
+        return
+      }
+      if (isBusyRef.current) {
+        // Browser back while busy: stay open (restore the overlay entry) and warn.
+        window.history.pushState({ overlay: true }, '', window.location.href)
+        setBusyToast('Please wait until the action completes.')
         return
       }
       onCloseRef.current?.()
@@ -218,6 +240,15 @@ function AssignUsersDrawerContent({
       if (result.ruleChangedTo) onRuleChange?.(pipeline.id, result.ruleChangedTo)
       if (result.unassignedCount) onDealsChange?.()
     } catch (err) {
+      if (err?.status === 409 && !confirmUnassign) {
+        try {
+          const preview = await previewCrmPipelineUsers(token, pipeline.id, desiredIds)
+          setPendingSave(preview)
+          return
+        } catch {
+          // fall through to the error below
+        }
+      }
       setAccessError(err?.message || 'Unable to save pipeline access.')
       setPendingSave(null)
     } finally {
@@ -280,6 +311,7 @@ function AssignUsersDrawerContent({
               type="button"
               onClick={closeDrawer}
               aria-label="Close assign users"
+              aria-disabled={isBusy}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xs border border-[var(--ew-line)] text-muted transition-colors hover:text-ink"
             >
               <LuX className="h-4 w-4" />
@@ -454,6 +486,7 @@ function AssignUsersDrawerContent({
                 isActive={activeTab === 'deal-assign'}
                 onRuleChange={(method) => onRuleChange?.(pipeline.id, method)}
                 onDealsChange={onDealsChange}
+                onBusyChange={setIsPanelBusy}
               />
             </section>
           </div>
@@ -528,6 +561,7 @@ function AssignUsersDrawerContent({
           </p>
         ) : null}
       </Alert>
+      <Toast open={Boolean(busyToast)} message={busyToast} type="error" onClose={() => setBusyToast('')} />
     </>,
     document.body,
   )

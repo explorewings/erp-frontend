@@ -3,7 +3,9 @@ import { API_BASE_URL, getApiErrorMessage } from '../authetication/api.js'
 async function readResponse(response, fallback) {
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(response, data, fallback))
+    const error = new Error(getApiErrorMessage(response, data, fallback))
+    error.status = response.status
+    throw error
   }
   return data
 }
