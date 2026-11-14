@@ -204,11 +204,15 @@ export async function saveCrmAssignmentRule(token, pipelineId, method, userId) {
   return readResponse(response, 'Unable to save the assignment rule.')
 }
 
-/** Assigns the next chunk (≤ 100) of unassigned deals by the saved rule. */
-export async function distributeCrmUnassignedDeals(token, pipelineId) {
+/**
+ * Bulk tool: assigns the next chunk (≤ 100) of unassigned deals by `method`
+ * ('round_robin' = share equally, 'single_user' = all to `userId`). Never changes the rule.
+ */
+export async function distributeCrmUnassignedDeals(token, pipelineId, method, userId) {
   const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/assignments/distribute`, {
     method: 'POST',
-    headers: authHeaders(token),
+    headers: authHeaders(token, true),
+    body: JSON.stringify(method === 'single_user' ? { method, userId } : { method }),
   })
   return readResponse(response, 'Unable to assign deals.')
 }

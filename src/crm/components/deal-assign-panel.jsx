@@ -1,9 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  LuChevronDown,
-  LuHand,
-  LuUserPlus,
-} from 'react-icons/lu'
+import { useEffect, useRef, useState } from 'react'
+import { LuChevronDown } from 'react-icons/lu'
 import Alert from '../../appcomponents/alert.jsx'
 import Loader from '../../appcomponents/loader.jsx'
 import {
@@ -22,9 +18,6 @@ const RULE_LABELS = {
   manual: 'Manual',
 }
 
-/** Rules that assign existing deals in bulk; only one may own deals at a time. */
-const BULK_SOURCES = ['round_robin', 'single_user']
-
 const CARDS = [
   {
     id: 'round_robin',
@@ -33,22 +26,36 @@ const CARDS = [
     description: 'Share deals equally, giving each one to the next user in turn.',
   },
   {
-    id: 'creator_manual',
-    methods: ['creator', 'manual'],
-    title: 'Creator + manual',
-    description: 'Give deals to the person who adds them, or assign every deal by hand.',
-  },
-  {
     id: 'single_user',
     methods: ['single_user'],
     title: 'Single user',
-    description: 'Give every deal to one user you choose.',
+    description: 'Give deals to one user you choose.',
+  },
+  {
+    id: 'creator',
+    methods: ['creator'],
+    title: 'Creator',
+    description: 'The person who adds a deal to this pipeline is assigned to it.',
+    noTools: true,
+  },
+  {
+    id: 'manual',
+    methods: ['manual'],
+    title: 'Manual',
+    description: 'New deals stay unassigned. Assign them from the deal details drawer.',
+    noTools: true,
   },
 ]
 
+const cardOf = (method) => CARDS.find((card) => card.methods.includes(method))?.id ?? null
+
 /**
- * Deal assign tab: the pipeline's assignment rule. Round robin and single user
- * can also assign the existing unassigned deals, in chunks, with progress.
+ * Deal assign tab. Two independent things live in each card:
+ * - The radio "Use for new deals" sets the pipeline's rule. It only affects
+ *   deals added from then on; existing owners never change.
+ * - The card's tools act on existing deals at any time, whatever the rule:
+ *   share unassigned deals equally (round robin), give them to one user
+ *   (single user), and Unassign / Revert what that method assigned.
  * Only super roles can change anything (`canEdit`).
  */
 export default function DealAssignPanel({
@@ -67,18 +74,22 @@ export default function DealAssignPanel({
   const [reloadTick, setReloadTick] = useState(0)
   const [expanded, setExpanded] = useState(null)
   const [savingMethod, setSavingMethod] = useState(null)
-  const [run, setRun] = useState(null) // { method, total, done, status, message }
+  const [run, setRun] = useState(null) // bulk assign: { method, total, done, status, message }
   const [actionError, setActionError] = useState('')
   const [notice, setNotice] = useState('')
   // Unassign confirmation: { source, userId, username, isReceiver, total, done, status: 'confirm' | 'running', error }
   const [unassign, setUnassign] = useState(null)
+  // Rule change confirmation: { method, userId, username }
+  const [ruleConfirm, setRuleConfirm] = useState(null)
 
   const mountedRef = useRef(true)
   const onRuleChangeRef = useRef(onRuleChange)
   const onDealsChangeRef = useRef(onDealsChange)
+  const onBusyChangeRef = useRef(onBusyChange)
   useEffect(() => {
     onRuleChangeRef.current = onRuleChange
     onDealsChangeRef.current = onDealsChange
+    onBusyChangeRef.current = onBusyChange
   })
   useEffect(() => {
     mountedRef.current = true
@@ -90,10 +101,6 @@ export default function DealAssignPanel({
   const isBusy = Boolean(savingMethod) || run?.status === 'running' || unassign?.status === 'running'
 
   // Lets the drawer refuse to close while an action is running.
-  const onBusyChangeRef = useRef(onBusyChange)
-  useEffect(() => {
-    onBusyChangeRef.current = onBusyChange
-  })
   useEffect(() => {
     onBusyChangeRef.current?.(isBusy)
   }, [isBusy])
@@ -108,7 +115,7 @@ export default function DealAssignPanel({
       .then((data) => {
         if (cancelled) return
         setOverview(data)
-        setExpanded((current) => current ?? CARDS.find((card) => card.methods.includes(data.method))?.id ?? null)
+        setExpanded((current) => current ?? cardOf(data.method))
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err?.message || 'Unable to load deal assignment.')
@@ -121,97 +128,77 @@ export default function DealAssignPanel({
     }
   }, [token, pipelineId, isActive, refreshKey, reloadTick])
 
-  const applyOverview = useCallback((data) => {
-    if (!mountedRef.current) return
-    setOverview(data)
-    // A saved rule becomes the selected card.
-    setExpanded(CARDS.find((card) => card.methods.includes(data.method))?.id ?? null)
-    onRuleChangeRef.current?.(data.method)
-  }, [])
+  // ------------------------------------------------------ rule for new deals
 
-  const saveRule = async (method, userId) => {
-    const unchanged =
-      overview?.method === method && (method !== 'single_user' || overview.singleUserId === userId)
-    if (isBusy || unchanged) return overview
-    setSavingMethod(method)
+  const requestRule = (method, user) => {
+    if (!canEdit || isBusy) return
     setActionError('')
     setNotice('')
+    setRuleConfirm({ method, userId: user?.userId ?? null, username: user?.username ?? null })
+  }
+
+  const confirmRule = async () => {
+    if (!ruleConfirm || savingMethod) return
+    const { method, userId, username } = ruleConfirm
+    setSavingMethod(method)
     try {
-      const data = await saveCrmAssignmentRule(token, pipelineId, method, userId)
-      applyOverview(data)
-      return data
+      const data = await saveCrmAssignmentRule(token, pipelineId, method, userId ?? undefined)
+      if (!mountedRef.current) return
+      setOverview(data)
+      onRuleChangeRef.current?.(data.method)
+      setRuleConfirm(null)
+      setNotice(
+        method === 'single_user'
+          ? `Saved. Every new deal now goes to ${data.singleUsername ?? username ?? 'the chosen user'}.`
+          : `Saved. New deals now use ${RULE_LABELS[method].toLowerCase()}.`,
+      )
+    } catch (err) {
+      if (mountedRef.current) {
+        setRuleConfirm(null)
+        setActionError(err?.message || 'Unable to save the rule for new deals.')
+      }
     } finally {
       if (mountedRef.current) setSavingMethod(null)
     }
   }
 
-  const handleSelectRule = async (method) => {
-    try {
-      await saveRule(method)
-      if (mountedRef.current) setNotice(`${RULE_LABELS[method]} saved. New deals follow this rule.`)
-    } catch (err) {
-      if (mountedRef.current) setActionError(err?.message || 'Unable to save the assignment rule.')
-    }
-  }
+  // ----------------------------------------------- bulk assign (existing deals)
 
-  /** Single user ①: saves who gets new deals. Resolves true when saved. */
-  const handleSaveTarget = async (userId) => {
-    try {
-      const data = await saveRule('single_user', userId)
-      if (mountedRef.current) {
-        setNotice(`Saved. Every new deal now goes to ${data?.singleUsername ?? 'the chosen user'}.`)
-      }
-      return true
-    } catch (err) {
-      if (mountedRef.current) setActionError(err?.message || 'Unable to save the assignment rule.')
-      return false
-    }
-  }
-
-  /** Saves the rule (if needed), then assigns unassigned deals chunk by chunk. */
-  const handleAssign = async (method, userId) => {
-    if (isBusy || !overview) return
+  /** Assigns the unassigned deals by `method` in chunks, with progress. Never changes the rule. */
+  const handleBulk = async (method, user) => {
+    if (!canEdit || isBusy || !overview) return
+    const total = overview.unassigned
+    if (total === 0) return
     setActionError('')
     setNotice('')
-    let saved
-    try {
-      saved = await saveRule(method, userId)
-    } catch (err) {
-      if (mountedRef.current) setActionError(err?.message || 'Unable to save the assignment rule.')
-      return
-    }
-    const total = saved?.unassigned ?? 0
-    if (total === 0) {
-      setNotice(
-        method === 'single_user'
-          ? `Saved. All new deals will be assigned to ${saved?.singleUsername ?? 'the chosen user'}.`
-          : `${RULE_LABELS[method]} saved. New deals follow this rule.`,
-      )
-      return
-    }
-
     let done = 0
     setRun({ method, total, done, status: 'running', message: '' })
     try {
-      // Each call assigns up to one chunk; loop until nothing is left.
       for (;;) {
         if (!mountedRef.current) return
-        const result = await distributeCrmUnassignedDeals(token, pipelineId)
+        const result = await distributeCrmUnassignedDeals(token, pipelineId, method, user?.userId)
         done += result.assignedCount
-        if (mountedRef.current) {
-          setRun({ method, total, done: Math.min(done, total), status: 'running', message: '' })
-        }
+        if (mountedRef.current) setRun({ method, total, done: Math.min(done, total), status: 'running', message: '' })
         if (result.remaining === 0) break
         if (result.assignedCount === 0) {
           throw new Error(
             method === 'single_user'
-              ? `${saved?.singleUsername ?? 'The chosen user'} can no longer receive deals. Choose someone else.`
+              ? `${user?.username ?? 'That user'} can no longer receive deals. Choose someone else.`
               : `${plural(result.remaining, 'deal')} could not be assigned because no eligible user is available.`,
           )
         }
       }
       if (mountedRef.current) {
-        setRun({ method, total, done, status: 'done', message: `Assigned ${plural(done, 'deal')}.` })
+        setRun({
+          method,
+          total,
+          done,
+          status: 'done',
+          message:
+            method === 'single_user'
+              ? `Gave ${plural(done, 'deal')} to ${user?.username ?? 'the user'}.`
+              : `Shared ${plural(done, 'deal')} equally.`,
+        })
       }
     } catch (err) {
       if (mountedRef.current) {
@@ -223,6 +210,8 @@ export default function DealAssignPanel({
       if (mountedRef.current) setReloadTick((tick) => tick + 1)
     }
   }
+
+  // ------------------------------------------------------ unassign / revert
 
   /** Opens the confirmation for all of `source`'s deals, or only `owner`'s. */
   const openUnassign = (source, owner) => {
@@ -243,7 +232,7 @@ export default function DealAssignPanel({
     })
   }
 
-  /** Unassigns every deal assigned by `source`, chunk by chunk, with progress in the alert. */
+  /** Unassigns the chosen deals chunk by chunk (progress in the alert, or under the user's row). */
   const confirmUnassign = async () => {
     if (!unassign || unassign.status === 'running') return
     const { source, userId, username, total } = unassign
@@ -279,6 +268,8 @@ export default function DealAssignPanel({
     }
   }
 
+  // ---------------------------------------------------------------- render
+
   if (isLoading && !overview) {
     return (
       <p role="status" className="py-6 text-center text-sm text-[var(--ew-muted)]">
@@ -299,37 +290,40 @@ export default function DealAssignPanel({
   if (!overview) return null
 
   const { method, total, assigned, unassigned, users, singleUserId, singleUsername, singleUserEligible } = overview
+  const ruleCardId = cardOf(method)
   const roundRobinAssigned = overview.assignedBySource?.round_robin ?? 0
-  const isSingleActive = method === 'single_user'
-  const activeCardId = CARDS.find((card) => card.methods.includes(method))?.id ?? CARDS[0].id
-  // One bulk rule at a time: a card is locked while another bulk rule still owns deals.
-  const lockOf = (card) => {
-    const source = BULK_SOURCES.find(
-      (candidate) => !card.methods.includes(candidate) && (overview.assignedBySource?.[candidate] ?? 0) > 0,
-    )
-    return source ? { source, count: overview.assignedBySource[source] } : null
-  }
-  const selectedCardId =
-    expanded && !lockOf(CARDS.find((card) => card.id === expanded) ?? CARDS[0]) ? expanded : activeCardId
 
-  const roundRobinButton =
-    !canEdit || users.length === 0
-      ? null
-      : unassigned > 0
-        ? `Assign ${plural(unassigned, 'deal')}`
-        : method !== 'round_robin'
-          ? 'Use round robin'
-          : null
+  const handleRadio = (card) => {
+    if (card.id === ruleCardId) return
+    if (card.id !== 'single_user') requestRule(card.id)
+    else {
+      // Single user needs a person: open the card so one can be picked.
+      setExpanded('single_user')
+      setActionError('')
+      setNotice('Pick a user in Single user, then click Use for new deals.')
+    }
+  }
+
+  const ruleDescription = (() => {
+    if (!ruleConfirm) return ''
+    const change = {
+      round_robin: `New deals will be shared in turn among ${plural(users.length, 'user')}.`,
+      single_user: `Every new deal will go to ${ruleConfirm.username ?? 'the chosen user'}.`,
+      creator: 'Whoever adds a deal will own it.',
+      manual: 'New deals will stay unassigned until someone assigns them.',
+    }[ruleConfirm.method]
+    return `${change} Existing deals keep their owners.`
+  })()
 
   return (
     <div>
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-[var(--ew-ink)]">Deal assignment rule</h3>
+        <h3 className="text-sm font-semibold text-[var(--ew-ink)]">Deal assignment</h3>
         <p className="mt-1 text-xs text-[var(--ew-muted)]">
-          The rule is saved to this pipeline. New deals follow it from then on.
+          The selected rule decides who gets new deals. Each card's tools work on existing deals at any time.
         </p>
         {!canEdit ? (
-          <p className="mt-2 text-xs text-[var(--ew-muted)]">Only superadmins can change the assignment rule.</p>
+          <p className="mt-2 text-xs text-[var(--ew-muted)]">Only superadmins can change deal assignment.</p>
         ) : null}
       </div>
 
@@ -346,103 +340,73 @@ export default function DealAssignPanel({
         </p>
       ) : null}
 
-      <div className="space-y-3" role="radiogroup" aria-label="Deal assignment rule">
+      <div className="space-y-3" role="radiogroup" aria-label="Rule for new deals">
         {CARDS.map((card) => {
-          const isCurrent = card.methods.includes(method)
-          const lock = isCurrent ? null : lockOf(card)
-          // One rule at a time: the selected card is open and usable, the others are disabled.
-          const isOpen = selectedCardId === card.id
+          const isRule = card.id === ruleCardId
+          const isOpen = !card.noTools && expanded === card.id
           return (
             <article
               key={card.id}
-              className={`rounded-control border transition-opacity ${isOpen ? '' : 'opacity-60'}`}
-              style={{
-                borderColor: isOpen ? '#cc785c' : 'var(--ew-line)',
-                background: 'var(--ew-surface)',
-              }}
+              className="rounded-control border"
+              style={{ borderColor: isRule ? '#cc785c' : 'var(--ew-line)', background: 'var(--ew-surface)' }}
             >
-              <button
-                type="button"
-                role="radio"
-                aria-checked={isOpen}
-                onClick={() => setExpanded(card.id)}
-                disabled={Boolean(lock) || (isBusy && !isOpen)}
-                aria-controls={`deal-assign-${card.id}`}
-                className="flex w-full items-start gap-3 p-4 text-left disabled:cursor-not-allowed"
-              >
-                <span
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                    isOpen ? 'border-[#cc785c]' : 'border-[var(--ew-muted)]'
-                  }`}
-                  aria-hidden="true"
+              <div className="flex items-start gap-3 p-4">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={isRule}
+                  aria-label={`Use ${card.title} for new deals`}
+                  title={isRule ? 'Rule for new deals' : 'Use for new deals'}
+                  onClick={() => handleRadio(card)}
+                  disabled={!canEdit || isBusy}
+                  className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border disabled:cursor-not-allowed"
+                  style={{ borderColor: isRule ? '#cc785c' : 'var(--ew-muted)' }}
                 >
-                  {isOpen ? <span className="h-2 w-2 rounded-full bg-[#cc785c]" /> : null}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-[var(--ew-ink)]">{card.title}</span>
-                    {isCurrent ? (
-                      <span className="rounded-pill bg-[#cc785c]/10 px-2 py-0.5 text-[11px] font-medium text-[#b76c4f]">
-                        Active
-                        {card.methods.length > 1 ? ` · ${RULE_LABELS[method]}` : ''}
-                        {card.id === 'single_user' && singleUsername ? ` · ${singleUsername}` : ''}
-                      </span>
-                    ) : null}
+                  {isRule ? <span className="h-2 w-2 rounded-full bg-[#cc785c]" /> : null}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => (card.noTools ? handleRadio(card) : setExpanded(isOpen ? null : card.id))}
+                  disabled={card.noTools && (!canEdit || isBusy || isRule)}
+                  aria-expanded={card.noTools ? undefined : isOpen}
+                  aria-controls={card.noTools ? undefined : `deal-assign-${card.id}`}
+                  className="flex min-w-0 flex-1 items-start gap-3 text-left disabled:cursor-default"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-[var(--ew-ink)]">{card.title}</span>
+                      {isRule ? (
+                        <span className="rounded-pill bg-[#cc785c]/10 px-2 py-0.5 text-[11px] font-medium text-[#b76c4f]">
+                          New deals
+                          {card.id === 'single_user' && singleUsername ? ` · ${singleUsername}` : ''}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="mt-1 block text-xs leading-relaxed text-[var(--ew-muted)]">{card.description}</span>
                   </span>
-                  <span className="mt-1 block text-xs leading-relaxed text-[var(--ew-muted)]">{card.description}</span>
-                </span>
-              </button>
-
-              {lock ? (
-                <p className="-mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 pb-3 pl-11 text-xs text-[var(--ew-muted)]">
-                  <span>
-                    Locked: {plural(lock.count, 'deal')} {lock.count === 1 ? 'was' : 'were'} assigned by{' '}
-                    {RULE_LABELS[lock.source].toLowerCase()}.
-                  </span>
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      onClick={() => openUnassign(lock.source)}
-                      disabled={isBusy}
-                      className="font-medium text-[#b76c4f] underline underline-offset-2 hover:text-[#cc785c] disabled:opacity-60"
-                    >
-                      Revert {RULE_LABELS[lock.source].toLowerCase()}
-                    </button>
-                  ) : null}
-                </p>
-              ) : null}
+                  {card.noTools ? null : (
+                    <LuChevronDown
+                      className={`mt-1 h-4 w-4 shrink-0 text-[var(--ew-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+              </div>
 
               {isOpen ? (
                 <div id={`deal-assign-${card.id}`} className="border-t px-4 pb-4 pt-3" style={{ borderColor: 'var(--ew-line)' }}>
-                  {!isCurrent ? (
-                    <p className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xs bg-ground/60 px-3 py-2 text-xs text-[var(--ew-muted)]">
-                      <span>
-                        Not active yet. The current rule is{' '}
-                        <span className="font-medium text-[var(--ew-ink)]">{RULE_LABELS[method]}</span>.
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setExpanded(activeCardId)}
-                        disabled={isBusy}
-                        className="font-medium text-[#b76c4f] underline underline-offset-2 hover:text-[#cc785c] disabled:opacity-60"
-                      >
-                        Keep {RULE_LABELS[method]}
-                      </button>
-                    </p>
-                  ) : null}
                   {card.id === 'round_robin' ? (
-                    <DistributeSection
-                      method="round_robin"
+                    <RoundRobinSection
                       users={users}
-                      usersLabel="Users in this pipeline"
-                      summary={
-                        users.length === 0
-                          ? 'No eligible users in this pipeline. Add users with CRM access first.'
-                          : unassigned > 0
-                            ? `${plural(unassigned, 'unassigned deal')} will be shared equally among ${plural(users.length, 'user')} (about ${Math.ceil(unassigned / users.length)} each).`
-                            : 'No unassigned deals. Saving the rule shares new deals in turn.'
-                      }
-                      summaryAction={
+                      unassigned={unassigned}
+                      owners={overview.roundRobinOwners ?? []}
+                      canEdit={canEdit}
+                      isBusy={isBusy}
+                      run={run}
+                      unassign={unassign}
+                      onShare={() => handleBulk('round_robin')}
+                      onUnassignUser={(owner) => openUnassign('round_robin', owner)}
+                      revertAction={
                         canEdit && roundRobinAssigned > 0 ? (
                           <button
                             type="button"
@@ -454,15 +418,6 @@ export default function DealAssignPanel({
                           </button>
                         ) : null
                       }
-                      buttonLabel={roundRobinButton}
-                      run={run}
-                      isBusy={isBusy}
-                      savingMethod={savingMethod}
-                      onAssign={() => handleAssign('round_robin')}
-                      owners={overview.roundRobinOwners ?? []}
-                      canEdit={canEdit}
-                      unassign={unassign}
-                      onUnassignUser={(owner) => openUnassign('round_robin', owner)}
                     />
                   ) : null}
 
@@ -470,48 +425,20 @@ export default function DealAssignPanel({
                     <SingleUserSection
                       key={`${singleUserId ?? 'none'}:${method}`}
                       users={users}
-                      isActive={isSingleActive}
+                      isRule={method === 'single_user'}
                       targetId={singleUserId}
                       targetName={singleUsername}
                       targetEligible={singleUserEligible}
                       unassigned={unassigned}
                       canEdit={canEdit}
                       isBusy={isBusy}
-                      savingMethod={savingMethod}
                       run={run}
-                      onSaveTarget={handleSaveTarget}
-                      onGiveDeals={() => handleAssign('single_user', singleUserId)}
-                      owners={overview.singleUserOwners ?? []}
                       unassign={unassign}
+                      owners={overview.singleUserOwners ?? []}
+                      onUseForNewDeals={(user) => requestRule('single_user', user)}
+                      onGive={(user) => handleBulk('single_user', user)}
                       onUnassign={(owner) => openUnassign('single_user', owner)}
                     />
-                  ) : null}
-
-                  {card.id === 'creator_manual' ? (
-                    <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Creator or manual">
-                      <SubOption
-                        method="creator"
-                        currentMethod={method}
-                        title="Creator"
-                        description="The person who adds a deal to this pipeline is assigned to it."
-                        Icon={LuUserPlus}
-                        canEdit={canEdit}
-                        isBusy={isBusy}
-                        savingMethod={savingMethod}
-                        onSelect={handleSelectRule}
-                      />
-                      <SubOption
-                        method="manual"
-                        currentMethod={method}
-                        title="Manual"
-                        description="New deals stay unassigned. Assign them from the deal details drawer."
-                        Icon={LuHand}
-                        canEdit={canEdit}
-                        isBusy={isBusy}
-                        savingMethod={savingMethod}
-                        onSelect={handleSelectRule}
-                      />
-                    </div>
                   ) : null}
                 </div>
               ) : null}
@@ -519,6 +446,20 @@ export default function DealAssignPanel({
           )
         })}
       </div>
+
+      <Alert
+        open={Boolean(ruleConfirm)}
+        variant="default"
+        title={ruleConfirm ? `Use ${RULE_LABELS[ruleConfirm.method].toLowerCase()} for new deals?` : ''}
+        description={ruleDescription}
+        confirmLabel="Use for new deals"
+        confirmingLabel="Saving..."
+        isConfirming={Boolean(savingMethod)}
+        onConfirm={confirmRule}
+        onCancel={() => {
+          if (!savingMethod) setRuleConfirm(null)
+        }}
+      />
 
       <Alert
         open={Boolean(unassign) && (unassign.status === 'confirm' || !unassign.userId)}
@@ -531,14 +472,14 @@ export default function DealAssignPanel({
           !unassign
             ? ''
             : unassign.username
-              ? `This removes ${unassign.username} from ${plural(unassign.total, 'deal')} assigned by the ${RULE_LABELS[
+              ? `This removes ${unassign.username} from ${plural(unassign.total, 'deal')} assigned by ${RULE_LABELS[
                   unassign.source
-                ].toLowerCase()} rule. Their other deals are not affected.${
-                  unassign.isReceiver ? ` ${unassign.username} still receives new deals until you choose someone else.` : ''
+                ].toLowerCase()}. Their other deals are not affected.${
+                  unassign.isReceiver ? ` ${unassign.username} still gets new deals until you change the rule.` : ''
                 }`
               : `This removes the owner from ${plural(unassign.total, 'deal')} assigned by ${RULE_LABELS[
                   unassign.source
-                ].toLowerCase()}. Deals assigned another way are not affected, and the rule stays the same.`
+                ].toLowerCase()}. Deals assigned another way are not affected, and the rule for new deals stays the same.`
         }
         confirmLabel={
           !unassign
@@ -579,7 +520,7 @@ function StatTile({ label, value, highlight = false }) {
   )
 }
 
-/** Chunked progress for the rule that is currently assigning (`run.method === method`). */
+/** Chunked progress for the bulk tool that is running (`run.method === method`). */
 function RunProgress({ run, method }) {
   if (run?.method !== method) return null
   const percent = run.total ? Math.round((run.done / run.total) * 100) : 0
@@ -609,15 +550,17 @@ function RunProgress({ run, method }) {
   )
 }
 
-function AssignButton({ label, method, run, isBusy, savingMethod, onClick }) {
-  if (!label) return null
-  const spinning = savingMethod === method || (run?.method === method && run.status === 'running')
+function ActionButton({ label, spinning, isBusy, onClick, variant = 'primary' }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={isBusy}
-      className="mt-3 inline-flex h-9 max-w-full items-center gap-2 rounded-xs bg-[#cc785c] px-4 text-sm font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-60"
+      className={`inline-flex h-9 max-w-full items-center gap-2 rounded-xs px-4 text-sm font-medium transition-colors disabled:opacity-60 ${
+        variant === 'primary'
+          ? 'bg-[#cc785c] text-white hover:bg-[#b36a4e]'
+          : 'border border-[var(--ew-line)] bg-ground text-[var(--ew-ink)] hover:bg-ground/70'
+      }`}
     >
       {spinning ? <Loader size={0.7} /> : null}
       <span className="truncate">{label}</span>
@@ -651,40 +594,37 @@ function UnassignProgress({ progress, username, className = '' }) {
 }
 
 /**
- * Round robin: users with their load, each with its own Unassign for the deals
- * round robin gave them (progress under the row), then the summary (+ the
- * card-wide Unassign), progress and the Assign button.
+ * Round robin tools: per-user round-robin deals (each with Unassign, progress
+ * under the row), "Share N unassigned deals equally", and a footer with
+ * Revert round robin.
  */
-function DistributeSection({
-  method,
+function RoundRobinSection({
   users,
-  usersLabel,
-  summary,
-  summaryAction = null,
-  buttonLabel,
-  run,
+  unassigned,
+  owners,
+  canEdit,
   isBusy,
-  savingMethod,
-  onAssign,
-  owners = [],
-  canEdit = false,
-  unassign = null,
+  run,
+  unassign,
+  onShare,
   onUnassignUser,
+  revertAction,
 }) {
   const ownedBy = new Map(owners.map((owner) => [owner.userId, owner.dealCount]))
   const rows = [
-    ...users.map((user) => ({ ...user, eligible: true })),
-    // Users who lost access but still own deals from this rule.
+    ...users.map((user) => ({ userId: user.userId, username: user.username, eligible: true })),
+    // Users who lost access but still own round-robin deals.
     ...owners
       .filter((owner) => !users.some((user) => user.userId === owner.userId))
-      .map((owner) => ({ userId: owner.userId, username: owner.username, dealCount: owner.dealCount, eligible: false })),
+      .map((owner) => ({ userId: owner.userId, username: owner.username, eligible: false })),
   ]
-  // Rows show only the deals round robin gave each user — exactly what their Unassign removes.
+  // Rows count only the deals round robin gave each user — exactly what their Unassign removes.
   const maxLoad = Math.max(1, ...rows.map((row) => ownedBy.get(row.userId) ?? 0))
+  const running = run?.method === 'round_robin' && run.status === 'running'
 
   return (
     <div>
-      <p className="text-xs text-[var(--ew-muted)]">{usersLabel}</p>
+      <p className="text-xs text-[var(--ew-muted)]">Deals assigned by round robin</p>
       {rows.length ? (
         <ul className="mt-2 max-h-64 space-y-1.5 overflow-y-auto pr-1">
           {rows.map((row) => {
@@ -703,18 +643,18 @@ function DistributeSection({
                   <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-pill bg-[var(--ew-line)]">
                     <span
                       className="block h-full rounded-pill bg-[#cc785c]/70"
-                      style={{ width: `${((ownedBy.get(row.userId) ?? 0) / maxLoad) * 100}%` }}
+                      style={{ width: `${(owned / maxLoad) * 100}%` }}
                     />
                   </span>
                   <span className="w-14 shrink-0 text-right text-xs tabular-nums text-[var(--ew-muted)]">
-                    {plural(ownedBy.get(row.userId) ?? 0, 'deal')}
+                    {plural(owned, 'deal')}
                   </span>
                   {canEdit ? (
                     <span className="flex w-14 shrink-0 justify-end">
                       {owned > 0 && !rowRun ? (
                         <button
                           type="button"
-                          onClick={() => onUnassignUser?.({ userId: row.userId, username: row.username, dealCount: owned })}
+                          onClick={() => onUnassignUser({ userId: row.userId, username: row.username, dealCount: owned })}
                           disabled={isBusy}
                           aria-label={`Unassign ${plural(owned, 'round robin deal')} from ${row.username || 'this user'}`}
                           className="text-xs font-medium text-[#b76c4f] underline underline-offset-2 transition-colors hover:text-[#cc785c] disabled:cursor-not-allowed disabled:opacity-60"
@@ -730,270 +670,244 @@ function DistributeSection({
             )
           })}
         </ul>
+      ) : (
+        <p className="mt-2 text-xs text-[var(--ew-muted)]">No eligible users in this pipeline. Add users with CRM access first.</p>
+      )}
+
+      <RunProgress run={run} method="round_robin" />
+      {canEdit && users.length > 0 && unassigned > 0 ? (
+        <div className="mt-3">
+          <ActionButton
+            label={`Share ${plural(unassigned, 'unassigned deal')} equally`}
+            spinning={running}
+            isBusy={isBusy}
+            onClick={onShare}
+          />
+        </div>
       ) : null}
 
-      <RunProgress run={run} method={method} />
-      <AssignButton
-        label={buttonLabel}
-        method={method}
-        run={run}
-        isBusy={isBusy}
-        savingMethod={savingMethod}
-        onClick={onAssign}
-      />
-
-      {/* Card footer: what the rule will do, and the card-wide Unassign. */}
       <div
         className="-mx-4 -mb-4 mt-4 flex items-center justify-between gap-3 rounded-b-control border-t bg-ground/40 px-4 py-2.5"
         style={{ borderColor: 'var(--ew-line)' }}
       >
-        <p className="min-w-0 text-xs text-[var(--ew-muted)]">{summary}</p>
-        {summaryAction}
+        <p className="min-w-0 text-xs text-[var(--ew-muted)]">
+          {users.length === 0
+            ? 'No eligible users.'
+            : unassigned > 0
+              ? `${plural(unassigned, 'unassigned deal')} can be shared among ${plural(users.length, 'user')} (about ${Math.ceil(unassigned / users.length)} each).`
+              : 'No unassigned deals.'}
+        </p>
+        {revertAction}
       </div>
     </div>
   )
 }
 
 /**
- * Single user: one collapsible list of the pipeline's users.
- * - The header shows who gets new deals; clicking it expands the list inline.
- * - Click a user to pick them; the line under the list says what will happen
- *   and Save makes it the rule (nothing saves on a click).
- * - Each user with deals from this rule has its own Unassign; the progress bar
- *   runs under that user's row.
- * - Users who lost access but still own such deals stay listed (not pickable).
+ * Single user tools: one collapsible list of users (single-user deals per user,
+ * each with Unassign; progress under the row). Picking a user offers two
+ * separate actions: give the unassigned deals to them now, and/or make them
+ * the one who gets new deals (the rule — confirmed in an alert).
  */
 function SingleUserSection({
   users,
-  isActive,
+  isRule,
   targetId,
   targetName,
   targetEligible,
   unassigned,
   canEdit,
   isBusy,
-  savingMethod,
   run,
   unassign,
-  onSaveTarget,
-  onGiveDeals,
   owners,
+  onUseForNewDeals,
+  onGive,
   onUnassign,
 }) {
-  const hasTarget = isActive && Boolean(targetId)
+  const hasTarget = isRule && Boolean(targetId)
   const [isOpen, setIsOpen] = useState(!hasTarget && canEdit)
   const [draftId, setDraftId] = useState(null)
-  const isDirty = Boolean(draftId) && !(hasTarget && draftId === targetId)
-  const drafted = users.find((user) => user.userId === draftId)
-  const isSaving = savingMethod === 'single_user'
-  const canGive = canEdit && hasTarget && targetEligible && unassigned > 0
+  const pickedId = draftId ?? (hasTarget && targetEligible ? targetId : null)
+  const picked = users.find((user) => user.userId === pickedId) ?? null
+  const pickedIsTarget = Boolean(picked) && hasTarget && picked.userId === targetId
+  const giving = run?.method === 'single_user' && run.status === 'running'
 
-  const ownedBy = new Map(owners.map((owner) => [owner.userId, owner]))
+  const ownedBy = new Map(owners.map((owner) => [owner.userId, owner.dealCount]))
   const rows = [
-    ...users.map((user) => ({
-      userId: user.userId,
-      username: user.username,
-      dealCount: user.dealCount,
-      eligible: true,
-    })),
+    ...users.map((user) => ({ userId: user.userId, username: user.username, eligible: true })),
     // Owners of single-user deals who are no longer eligible.
     ...owners
       .filter((owner) => !users.some((user) => user.userId === owner.userId))
-      .map((owner) => ({
-        userId: owner.userId,
-        username: owner.username,
-        dealCount: owner.dealCount,
-        eligible: false,
-      })),
+      .map((owner) => ({ userId: owner.userId, username: owner.username, eligible: false })),
   ]
-
-  const save = async () => {
-    if (!drafted || !isDirty) return
-    const ok = await onSaveTarget(drafted.userId)
-    if (ok) {
-      setDraftId(null)
-      setIsOpen(false)
-    }
-  }
 
   const headerLabel = hasTarget ? targetName || 'User unavailable' : 'Choose a user'
 
   return (
-    <div className="space-y-4">
-      <section aria-label="User who gets new deals">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ew-muted)]">New deals go to</p>
-
-        <div
-          className="mt-2 overflow-hidden rounded-xs border"
-          style={{ borderColor: isOpen ? '#cc785c' : hasTarget && !targetEligible ? 'var(--ew-danger, #dc2626)' : 'var(--ew-line)' }}
+    <div className="space-y-3">
+      <div
+        className="overflow-hidden rounded-xs border"
+        style={{ borderColor: isOpen ? '#cc785c' : hasTarget && !targetEligible ? 'var(--ew-danger, #dc2626)' : 'var(--ew-line)' }}
+      >
+        <button
+          type="button"
+          onClick={() => setIsOpen((open) => !open)}
+          aria-expanded={isOpen}
+          aria-controls="single-user-list"
+          className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-ground/50"
         >
-          <button
-            type="button"
-            onClick={() => setIsOpen((open) => !open)}
-            aria-expanded={isOpen}
-            aria-controls="single-user-list"
-            className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-ground/50"
-          >
-            {hasTarget ? <Initial name={targetName} /> : null}
-            <span
-              className={`min-w-0 flex-1 truncate text-sm ${
-                hasTarget ? 'font-medium text-[var(--ew-ink)]' : 'text-[var(--ew-muted)]'
-              }`}
-            >
-              {headerLabel}
-            </span>
-            <span className="shrink-0 text-[11px] text-[var(--ew-muted)]">{plural(rows.length, 'user')}</span>
-            <LuChevronDown
-              className={`h-4 w-4 shrink-0 text-[var(--ew-muted)] transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`}
-              aria-hidden="true"
-            />
-          </button>
+          {hasTarget ? <Initial name={targetName} /> : null}
+          <span className={`min-w-0 flex-1 truncate text-sm ${hasTarget ? 'font-medium text-[var(--ew-ink)]' : 'text-[var(--ew-muted)]'}`}>
+            {headerLabel}
+            {hasTarget ? <span className="ml-1.5 text-[11px] font-normal text-[var(--ew-muted)]">(Gets new deals)</span> : null}
+          </span>
+          <span className="shrink-0 text-[11px] text-[var(--ew-muted)]">{plural(rows.length, 'user')}</span>
+          <LuChevronDown
+            className={`h-4 w-4 shrink-0 text-[var(--ew-muted)] transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
+        </button>
 
-          {isOpen ? (
-            rows.length === 0 ? (
-              <p className="border-t px-3 py-4 text-xs text-[var(--ew-muted)]" style={{ borderColor: 'var(--ew-line)' }}>
-                No eligible users in this pipeline. Add users with CRM access first.
-              </p>
-            ) : (
-              <ul
-                id="single-user-list"
-                role="radiogroup"
-                aria-label="Users"
-                className="max-h-72 divide-y divide-[var(--ew-line)] overflow-y-auto border-t"
-                style={{ borderColor: 'var(--ew-line)' }}
-              >
-                {rows.map((row) => {
-                  const owned = ownedBy.get(row.userId)?.dealCount ?? 0
-                  const isTarget = hasTarget && row.userId === targetId
-                  const isPicked = draftId ? row.userId === draftId : isTarget
-                  const rowRun = unassign?.userId === row.userId && unassign.status === 'running' ? unassign : null
-                  const pickable = canEdit && row.eligible && !isBusy
-                  return (
-                    <li key={row.userId} className={isPicked ? 'bg-[#cc785c]/5' : ''}>
-                      <div className="flex items-center gap-3 px-3 py-2">
+        {isOpen ? (
+          rows.length === 0 ? (
+            <p className="border-t px-3 py-4 text-xs text-[var(--ew-muted)]" style={{ borderColor: 'var(--ew-line)' }}>
+              No eligible users in this pipeline. Add users with CRM access first.
+            </p>
+          ) : (
+            <ul
+              id="single-user-list"
+              role="radiogroup"
+              aria-label="Users"
+              className="max-h-72 divide-y divide-[var(--ew-line)] overflow-y-auto border-t"
+              style={{ borderColor: 'var(--ew-line)' }}
+            >
+              {rows.map((row) => {
+                const owned = ownedBy.get(row.userId) ?? 0
+                const isTarget = hasTarget && row.userId === targetId
+                const isPicked = row.userId === pickedId
+                const rowRun = unassign?.userId === row.userId && unassign.status === 'running' ? unassign : null
+                const pickable = canEdit && row.eligible && !isBusy
+                return (
+                  <li key={row.userId} className={isPicked ? 'bg-[#cc785c]/5' : ''}>
+                    <div className="flex items-center gap-3 px-3 py-2">
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={isPicked}
+                        onClick={() => setDraftId(row.userId)}
+                        disabled={!pickable}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
+                      >
+                        <span
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                            isPicked ? 'border-[#cc785c]' : 'border-[var(--ew-muted)]'
+                          } ${row.eligible ? '' : 'opacity-40'}`}
+                          aria-hidden="true"
+                        >
+                          {isPicked ? <span className="h-2 w-2 rounded-full bg-[#cc785c]" /> : null}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className={`block truncate text-sm ${row.eligible ? 'text-[var(--ew-ink)]' : 'text-[var(--ew-muted)]'} ${
+                              isPicked ? 'font-medium' : ''
+                            }`}
+                          >
+                            {row.username || 'User unavailable'}
+                          </span>
+                          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--ew-muted)]">
+                            <span className="tabular-nums">{owned > 0 ? plural(owned, 'deal') : 'No deals'}</span>
+                            {isTarget ? <span>(Gets new deals)</span> : null}
+                            {!row.eligible ? (
+                              <span className="rounded-pill bg-danger-soft px-1.5 py-px font-medium text-danger">No access</span>
+                            ) : null}
+                          </span>
+                        </span>
+                      </button>
+                      {canEdit && owned > 0 && !rowRun ? (
                         <button
                           type="button"
-                          role="radio"
-                          aria-checked={isPicked}
-                          onClick={() => setDraftId(row.userId === targetId && hasTarget ? null : row.userId)}
-                          disabled={!pickable}
-                          className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
+                          onClick={() => onUnassign({ userId: row.userId, username: row.username, dealCount: owned })}
+                          disabled={isBusy}
+                          aria-label={`Unassign ${plural(owned, 'single user deal')} from ${row.username || 'this user'}`}
+                          className="shrink-0 text-xs font-medium text-[#b76c4f] underline underline-offset-2 transition-colors hover:text-[#cc785c] disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          <span
-                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                              isPicked ? 'border-[#cc785c]' : 'border-[var(--ew-muted)]'
-                            } ${row.eligible ? '' : 'opacity-40'}`}
-                            aria-hidden="true"
-                          >
-                            {isPicked ? <span className="h-2 w-2 rounded-full bg-[#cc785c]" /> : null}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span
-                              className={`block truncate text-sm ${
-                                row.eligible ? 'text-[var(--ew-ink)]' : 'text-[var(--ew-muted)]'
-                              } ${isPicked ? 'font-medium' : ''}`}
-                            >
-                              {row.username || 'User unavailable'}
-                            </span>
-                            <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--ew-muted)]">
-                              <span className="tabular-nums">{owned > 0 ? plural(owned, 'deal') : 'No deals'}</span>
-                              {isTarget ? (
-                                <span>(Gets new deals)</span>
-                              ) : null}
-                              {!row.eligible ? (
-                                <span className="rounded-pill bg-danger-soft px-1.5 py-px font-medium text-danger">
-                                  No access
-                                </span>
-                              ) : null}
-                            </span>
-                          </span>
+                          Unassign
                         </button>
-                        {canEdit && owned > 0 && !rowRun ? (
-                          <button
-                            type="button"
-                            onClick={() => onUnassign({ userId: row.userId, username: row.username, dealCount: owned })}
-                            disabled={isBusy}
-                            aria-label={`Unassign ${plural(owned, 'single user deal')} from ${row.username || 'this user'}`}
-                            className="shrink-0 text-xs font-medium text-[#b76c4f] underline underline-offset-2 transition-colors hover:text-[#cc785c] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Unassign
-                          </button>
-                        ) : null}
-                      </div>
-
-                      {rowRun ? (
-                        <UnassignProgress progress={rowRun} username={row.username} className="px-3 pb-2.5 pl-10" />
                       ) : null}
-                    </li>
-                  )
-                })}
-              </ul>
-            )
-          ) : null}
-        </div>
+                    </div>
+                    {rowRun ? <UnassignProgress progress={rowRun} username={row.username} className="px-3 pb-2.5 pl-10" /> : null}
+                  </li>
+                )
+              })}
+            </ul>
+          )
+        ) : null}
+      </div>
 
-        {/* What the selection means, right under the container. */}
-        {isDirty && drafted ? (
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="min-w-0 text-xs text-[var(--ew-ink)]">
-              <span className="font-medium">{drafted.username}</span> will be assigned new deals.
-            </p>
-            <div className="flex shrink-0 gap-2">
+      {hasTarget && !targetEligible ? (
+        <InlineError>
+          {targetName || 'The chosen user'} can no longer receive deals (inactive or no access). New deals stay unassigned
+          until you choose someone else.
+        </InlineError>
+      ) : null}
+
+      {/* What can be done with the picked user, right under the list. */}
+      {canEdit && picked ? (
+        <div className="space-y-2">
+          <p className="text-xs text-[var(--ew-ink)]">
+            {pickedIsTarget ? (
+              <>
+                <span className="font-medium">{picked.username}</span> gets new deals.
+              </>
+            ) : (
+              <>
+                <span className="font-medium">{picked.username}</span> will be assigned new deals if you use them for new
+                deals.
+              </>
+            )}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {unassigned > 0 ? (
+              <ActionButton
+                label={`Give ${plural(unassigned, 'unassigned deal')} to ${picked.username}`}
+                spinning={giving}
+                isBusy={isBusy}
+                onClick={() => onGive(picked)}
+              />
+            ) : null}
+            {!pickedIsTarget ? (
+              <ActionButton
+                label="Use for new deals"
+                variant="secondary"
+                isBusy={isBusy}
+                onClick={() => onUseForNewDeals(picked)}
+              />
+            ) : null}
+            {draftId && draftId !== (hasTarget ? targetId : null) ? (
               <button
                 type="button"
                 onClick={() => setDraftId(null)}
                 disabled={isBusy}
-                className="h-8 rounded-xs border border-[var(--ew-line)] bg-ground px-3 text-xs font-medium text-[var(--ew-muted)] transition-colors hover:bg-ground/70 disabled:opacity-60"
+                className="h-9 px-2 text-xs font-medium text-[var(--ew-muted)] underline underline-offset-2 hover:text-[var(--ew-ink)] disabled:opacity-60"
               >
-                Cancel
+                Clear
               </button>
-              <button
-                type="button"
-                onClick={save}
-                disabled={isBusy}
-                className="inline-flex h-8 items-center gap-2 rounded-xs bg-[#cc785c] px-3 text-xs font-medium text-white transition-colors hover:bg-[#b36a4e] disabled:opacity-60"
-              >
-                {isSaving ? <Loader size={0.6} /> : null}
-                Save
-              </button>
-            </div>
+            ) : null}
           </div>
-        ) : (
-          <p className="mt-2 text-xs text-[var(--ew-muted)]">
-            {hasTarget && !targetEligible
-              ? `${targetName || 'This user'} can no longer receive deals (inactive or no access). New deals stay unassigned until you choose someone else.`
-              : hasTarget
-                ? `${targetName} is assigned new deals.`
-                : canEdit
-                  ? 'Pick a user to get every new deal in this pipeline.'
-                  : 'No user chosen.'}
-          </p>
-        )}
-        {canEdit && owners.length > 0 ? (
-          <p className="mt-1 text-[11px] leading-relaxed text-[var(--ew-muted)]">
-            Unassign removes the owner from that user's single user deals only. It does not change who gets new deals.
-          </p>
-        ) : null}
-      </section>
+        </div>
+      ) : canEdit && users.length > 0 ? (
+        <p className="text-xs text-[var(--ew-muted)]">
+          Pick a user to give them the unassigned deals, or to make them get every new deal.
+        </p>
+      ) : null}
 
-      {hasTarget && targetEligible && unassigned > 0 ? (
-        <section className="border-t pt-3" style={{ borderColor: 'var(--ew-line)' }} aria-label="Unassigned deals">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ew-muted)]">
-            Unassigned deals · <span className="tabular-nums">{unassigned}</span>
-          </p>
-          <p className="mt-1 text-xs text-[var(--ew-muted)]">These deals have no owner. You can give them all to {targetName}.</p>
-          <RunProgress run={run} method="single_user" />
-          <AssignButton
-            label={canGive ? `Give ${plural(unassigned, 'deal')} to ${targetName}` : null}
-            method="single_user"
-            run={run}
-            isBusy={isBusy}
-            savingMethod={null}
-            onClick={onGiveDeals}
-          />
-        </section>
-      ) : run?.method === 'single_user' ? (
-        <RunProgress run={run} method="single_user" />
+      <RunProgress run={run} method="single_user" />
+
+      {canEdit && owners.length > 0 ? (
+        <p className="text-[11px] leading-relaxed text-[var(--ew-muted)]">
+          Unassign removes the owner from that user's single user deals only. It does not change who gets new deals.
+        </p>
       ) : null}
     </div>
   )
@@ -1007,27 +921,5 @@ function Initial({ name }) {
     >
       {(name || '?').slice(0, 1)}
     </span>
-  )
-}
-
-function SubOption({ method, currentMethod, title, description, Icon, canEdit, isBusy, savingMethod, onSelect }) {
-  const selected = currentMethod === method
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      onClick={() => onSelect(method)}
-      disabled={!canEdit || isBusy}
-      className={`flex flex-col items-start gap-1.5 rounded-xs border p-3 text-left transition-colors disabled:cursor-not-allowed ${
-        selected ? 'border-[#cc785c] bg-[#cc785c]/5' : 'border-[var(--ew-line)] hover:bg-ground/60'
-      } ${!canEdit && !selected ? 'opacity-60' : ''}`}
-    >
-      <span className="flex items-center gap-2 text-sm font-semibold text-[var(--ew-ink)]">
-        {savingMethod === method ? <Loader size={0.7} /> : <Icon className="h-4 w-4 text-[#b76c4f]" aria-hidden="true" />}
-        {title}
-      </span>
-      <span className="text-xs leading-relaxed text-[var(--ew-muted)]">{description}</span>
-    </button>
   )
 }

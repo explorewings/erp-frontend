@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuPencil, LuRotateCcw, LuUsers, LuX } from 'react-icons/lu'
+import { LuPencil, LuRotateCcw, LuX } from 'react-icons/lu'
 import Alert from '../../appcomponents/alert.jsx'
 import Toast from '../../appcomponents/toast.jsx'
 import DrawerBackdrop from '../../appcomponents/drawer-backdrop.jsx'
@@ -12,7 +12,6 @@ import {
 } from '../api.js'
 import DealAssignPanel from './deal-assign-panel.jsx'
 import InlineError from './inline-error.jsx'
-import PipelineTag from './pipeline-tag.jsx'
 import SlidingTabs from './sliding-tabs.jsx'
 import UserSelect from './user-select.jsx'
 import { isSuperRole } from '../utils.js'
@@ -294,18 +293,18 @@ function AssignUsersDrawerContent({
         <aside
           role="dialog"
           aria-modal="true"
-          aria-labelledby="assign-users-title"
+          aria-label={`Assign users · ${pipeline.name}`}
           className="flex h-full w-full flex-col border-l border-[var(--ew-line)] bg-[var(--ew-surface)] shadow-panel"
         >
           <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--ew-line)] px-5">
-            <div className="flex min-w-0 items-center gap-2">
-              <LuUsers className="h-4 w-4 shrink-0 text-[var(--ew-ink)]" aria-hidden="true" />
-              <div className="min-w-0">
-                <h2 id="assign-users-title" className="inline text-sm font-semibold text-[var(--ew-ink)]">
-                  Assign users
-                </h2>
-              </div>
-              <PipelineTag name={pipeline.name} />
+            <div className="min-w-0 flex-1">
+              <SlidingTabs
+                tabs={TABS}
+                activeTab={activeTab}
+                onChange={setActiveTab}
+                ariaLabel="User assignment settings"
+                idPrefix="assign-users"
+              />
             </div>
             <button
               type="button"
@@ -317,16 +316,6 @@ function AssignUsersDrawerContent({
               <LuX className="h-4 w-4" />
             </button>
           </header>
-
-          <div className="border-b border-[var(--ew-line)] px-5 py-3">
-            <SlidingTabs
-              tabs={TABS}
-              activeTab={activeTab}
-              onChange={setActiveTab}
-              ariaLabel="User assignment settings"
-              idPrefix="assign-users"
-            />
-          </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             <section
