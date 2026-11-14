@@ -9,6 +9,11 @@ const SEARCH_LIMIT = 20
  * System-style user dropdown with a server-side search bar.
  * `value` is the selected user id as a string; `onChange` receives the new id string and the user object.
  * `excludedIds` removes users that must not be offered (e.g. current members).
+ * `users` (optional) is a fixed list `[{ id, username, role, meta? }]` searched locally
+ * instead of the server; `meta` replaces the role on the right of each row.
+ * `collapsible` opens the list inline under the field (pushing content down)
+ * instead of floating over it, and keeps it open until a pick, a click on the
+ * field or Escape.
  */
 export default function UserSelect({
   token,
@@ -17,6 +22,8 @@ export default function UserSelect({
   excludedIds = [],
   disabled = false,
   placeholder = 'Select a user',
+  users: fixedUsers,
+  collapsible = false,
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -32,7 +39,7 @@ export default function UserSelect({
 
   // Server-side search, debounced so typing does not fire a request per keystroke.
   useEffect(() => {
-    if (!open || !token) return undefined
+    if (fixedUsers || !open || !token) return undefined
     let cancelled = false
     setIsLoading(true)
     setSearchError('')
@@ -56,22 +63,27 @@ export default function UserSelect({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [open, token, query])
+  }, [fixedUsers, open, token, query])
 
-  const options = users.filter(
+  const needle = query.trim().toLowerCase()
+  const source = fixedUsers
+    ? fixedUsers.filter((user) => !needle || String(user.username || '').toLowerCase().includes(needle))
+    : users
+  const options = source.filter(
     (user) => user.status !== 'inactive' && !excludedIds.includes(String(user.id)),
   )
 
-  const selected = options.find((user) => String(user.id) === value) ?? null
+  const selected =
+    (fixedUsers ?? options).find((user) => String(user.id) === value) ?? null
 
   useEffect(() => {
-    if (!open) return undefined
+    if (!open || collapsible) return undefined
     const handlePointer = (event) => {
       if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false)
     }
     document.addEventListener('mousedown', handlePointer)
     return () => document.removeEventListener('mousedown', handlePointer)
-  }, [open])
+  }, [open, collapsible])
 
   // Keep the highlighted option visible while moving through a long list.
   useEffect(() => {
@@ -176,7 +188,11 @@ export default function UserSelect({
 
       {open ? (
         <div
-          className="absolute left-0 top-full z-50 mt-1.5 flex max-h-72 w-full flex-col overflow-hidden rounded-xs border bg-[var(--ew-surface)] py-1 shadow-panel"
+          className={`flex w-full flex-col overflow-hidden rounded-xs border bg-[var(--ew-surface)] py-1 ${
+            collapsible
+              ? 'mt-1.5 max-h-64'
+              : 'absolute left-0 top-full z-50 mt-1.5 max-h-72 shadow-panel'
+          }`}
           style={{ borderColor: 'var(--ew-line)' }}
         >
           <div className="relative shrink-0 px-2 pb-1 pt-1">
@@ -196,7 +212,7 @@ export default function UserSelect({
             />
           </div>
           <ul ref={listRef} id={listId} role="listbox" aria-label="Users" className="min-h-0 flex-1 overflow-y-auto">
-            {isLoading ? (
+            {isLoading && !fixedUsers ? (
               <li className="px-3 py-6 text-center text-sm text-[var(--ew-muted)]" role="status">
                 Searching...
               </li>
@@ -226,7 +242,9 @@ export default function UserSelect({
                       {isSelected ? <LuCheck className="h-4 w-4" aria-hidden="true" /> : null}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-[var(--ew-ink)]">{user.username}</span>
-                    <span className="shrink-0 text-xs capitalize text-[var(--ew-muted)]">{user.role}</span>
+                    <span className={`shrink-0 text-xs text-[var(--ew-muted)] ${user.meta ? '' : 'capitalize'}`}>
+                      {user.meta ?? user.role}
+                    </span>
                   </li>
                 )
               })

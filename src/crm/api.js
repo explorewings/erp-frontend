@@ -210,3 +210,13 @@ export async function distributeCrmUnassignedDeals(token, pipelineId) {
   })
   return readResponse(response, 'Unable to assign deals.')
 }
+
+/** Unassigns the next chunk (≤ 100) of deals assigned by `source` (e.g. 'round_robin'); `userId` limits it to one owner. */
+export async function unassignCrmDealsBySource(token, pipelineId, source, userId) {
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/assignments/unassign`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify(userId ? { source, userId } : { source }),
+  })
+  return readResponse(response, 'Unable to unassign deals.')
+}
