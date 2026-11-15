@@ -17,7 +17,7 @@ import UserSelect from './user-select.jsx'
 import { isSuperRole } from '../utils.js'
 
 const TABS = [
-  { id: 'pipeline-access', label: 'Pipeline access' },
+  { id: 'pipeline-access', label: 'Access users' },
   { id: 'deal-assign', label: 'Deal assign' },
 ]
 
@@ -352,6 +352,7 @@ function AssignUsersDrawerContent({
                   </p>
                   <div className="mt-2">
                     <UserSelect
+                      hideSuperRoles
                       token={token}
                       value=""
                       onChange={handleAddUser}

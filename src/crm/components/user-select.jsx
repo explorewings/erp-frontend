@@ -8,7 +8,8 @@ const SEARCH_LIMIT = 20
 /**
  * System-style user dropdown with a server-side search bar.
  * `value` is the selected user id as a string; `onChange` receives the new id string and the user object.
- * `excludedIds` removes users that must not be offered (e.g. current members).
+ * `excludedIds` removes users that must not be offered (e.g. current members);
+ * `hideSuperRoles` removes superadmin/superuser (they have full access already).
  * `users` (optional) is a fixed list `[{ id, username, role, meta? }]` searched locally
  * instead of the server; `meta` replaces the role on the right of each row.
  * `collapsible` opens the list inline under the field (pushing content down)
@@ -24,6 +25,7 @@ export default function UserSelect({
   placeholder = 'Select a user',
   users: fixedUsers,
   collapsible = false,
+  hideSuperRoles = false,
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -70,7 +72,10 @@ export default function UserSelect({
     ? fixedUsers.filter((user) => !needle || String(user.username || '').toLowerCase().includes(needle))
     : users
   const options = source.filter(
-    (user) => user.status !== 'inactive' && !excludedIds.includes(String(user.id)),
+    (user) =>
+      user.status !== 'inactive' &&
+      !excludedIds.includes(String(user.id)) &&
+      !(hideSuperRoles && (user.role === 'superadmin' || user.role === 'superuser')),
   )
 
   const selected =

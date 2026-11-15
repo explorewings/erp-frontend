@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LuChevronDown } from 'react-icons/lu'
 import Alert from '../../appcomponents/alert.jsx'
 import Loader from '../../appcomponents/loader.jsx'
+import Tooltip from '../../appcomponents/tooltip.jsx'
 import {
   distributeCrmUnassignedDeals,
   fetchCrmAssignmentOverview,
@@ -350,48 +351,59 @@ export default function DealAssignPanel({
               className="rounded-control border"
               style={{ borderColor: isRule ? '#cc785c' : 'var(--ew-line)', background: 'var(--ew-surface)' }}
             >
-              <div className="flex items-start gap-3 p-4">
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={isRule}
-                  aria-label={`Use ${card.title} for new deals`}
-                  title={isRule ? 'Rule for new deals' : 'Use for new deals'}
-                  onClick={() => handleRadio(card)}
-                  disabled={!canEdit || isBusy}
-                  className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border disabled:cursor-not-allowed"
-                  style={{ borderColor: isRule ? '#cc785c' : 'var(--ew-muted)' }}
-                >
-                  {isRule ? <span className="h-2 w-2 rounded-full bg-[#cc785c]" /> : null}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => (card.noTools ? handleRadio(card) : setExpanded(isOpen ? null : card.id))}
-                  disabled={card.noTools && (!canEdit || isBusy || isRule)}
-                  aria-expanded={card.noTools ? undefined : isOpen}
-                  aria-controls={card.noTools ? undefined : `deal-assign-${card.id}`}
-                  className="flex min-w-0 flex-1 items-start gap-3 text-left disabled:cursor-default"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold text-[var(--ew-ink)]">{card.title}</span>
-                      {isRule ? (
-                        <span className="rounded-pill bg-[#cc785c]/10 px-2 py-0.5 text-[11px] font-medium text-[#b76c4f]">
-                          New deals
-                          {card.id === 'single_user' && singleUsername ? ` · ${singleUsername}` : ''}
-                        </span>
-                      ) : null}
+              <Tooltip
+                content={
+                  isRule
+                    ? card.id === 'single_user' && singleUsername
+                      ? `New incoming deals go to ${singleUsername}`
+                      : 'New incoming deals are assigned by this rule'
+                    : null
+                }
+                className="block"
+              >
+                <div className="flex items-start gap-3 p-4">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={isRule}
+                    aria-label={`Use ${card.title} for new deals`}
+                    title={isRule ? 'Rule for new deals' : 'Use for new deals'}
+                    onClick={() => handleRadio(card)}
+                    disabled={!canEdit || isBusy}
+                    className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border disabled:cursor-not-allowed"
+                    style={{ borderColor: isRule ? '#cc785c' : 'var(--ew-muted)' }}
+                  >
+                    {isRule ? <span className="h-2 w-2 rounded-full bg-[#cc785c]" /> : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => (card.noTools ? handleRadio(card) : setExpanded(isOpen ? null : card.id))}
+                    disabled={card.noTools && (!canEdit || isBusy || isRule)}
+                    aria-expanded={card.noTools ? undefined : isOpen}
+                    aria-controls={card.noTools ? undefined : `deal-assign-${card.id}`}
+                    className="flex min-w-0 flex-1 items-start gap-3 text-left disabled:cursor-default"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-[var(--ew-ink)]">{card.title}</span>
+                        {isRule ? (
+                          <span className="rounded-pill bg-[#cc785c]/10 px-2 py-0.5 text-[11px] font-medium text-[#b76c4f]">
+                            New deals
+                            {card.id === 'single_user' && singleUsername ? ` · ${singleUsername}` : ''}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="mt-1 block text-xs leading-relaxed text-[var(--ew-muted)]">{card.description}</span>
                     </span>
-                    <span className="mt-1 block text-xs leading-relaxed text-[var(--ew-muted)]">{card.description}</span>
-                  </span>
-                  {card.noTools ? null : (
-                    <LuChevronDown
-                      className={`mt-1 h-4 w-4 shrink-0 text-[var(--ew-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                      aria-hidden="true"
-                    />
-                  )}
-                </button>
-              </div>
+                    {card.noTools ? null : (
+                      <LuChevronDown
+                        className={`mt-1 h-4 w-4 shrink-0 text-[var(--ew-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </button>
+                </div>
+              </Tooltip>
 
               {isOpen ? (
                 <div id={`deal-assign-${card.id}`} className="border-t px-4 pb-4 pt-3" style={{ borderColor: 'var(--ew-line)' }}>
@@ -678,7 +690,7 @@ function RoundRobinSection({
       {canEdit && users.length > 0 && unassigned > 0 ? (
         <div className="mt-3">
           <ActionButton
-            label={`Share ${plural(unassigned, 'unassigned deal')} equally`}
+            label={`Share ${plural(unassigned, 'deal')}`}
             spinning={running}
             isBusy={isBusy}
             onClick={onShare}
@@ -870,7 +882,7 @@ function SingleUserSection({
           <div className="flex flex-wrap gap-2">
             {unassigned > 0 ? (
               <ActionButton
-                label={`Give ${plural(unassigned, 'unassigned deal')} to ${picked.username}`}
+                label={`Give ${plural(unassigned, 'deal')} to ${picked.username}`}
                 spinning={giving}
                 isBusy={isBusy}
                 onClick={() => onGive(picked)}
