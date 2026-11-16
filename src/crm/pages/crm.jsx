@@ -5,6 +5,7 @@ import {
   LuChevronRight,
   LuCreditCard,
   LuLayers,
+  LuListChecks,
   LuMonitor,
   LuPlus,
   LuSearch,
@@ -96,6 +97,13 @@ const ACTIONS = [
     title: 'Payment actions',
     description: 'Enable payment-related actions in the current pipeline.',
     Icon: LuCreditCard,
+  },
+  {
+    id: 'qualification-actions',
+    scope: 'pipeline',
+    title: 'Qualification actions',
+    description: 'Set up how deals are qualified in the current pipeline.',
+    Icon: LuListChecks,
   },
 ]
 
@@ -309,6 +317,15 @@ export default function Crm() {
               </button>
             </div>
           )}
+
+          {/* Switch pipelines without going back to the board; pipeline cards follow the selection. */}
+          {activeTab === 'actions' && pipelines.length > 0 ? (
+            <PipelineSelect
+              pipelines={pipelines}
+              value={selectedPipeline ? String(selectedPipeline.id) : ''}
+              onChange={selectPipeline}
+            />
+          ) : null}
         </div>
 
         {activeTab === 'pipeline' ? (
