@@ -208,21 +208,39 @@ export async function saveCrmAssignmentRule(token, pipelineId, method, userId) {
  * Bulk tool: assigns the next chunk (≤ 100) of unassigned deals by `method`
  * ('round_robin' = share equally, 'single_user' = all to `userId`). Never changes the rule.
  */
-export async function distributeCrmUnassignedDeals(token, pipelineId, method, userId) {
+export async function distributeCrmUnassignedDeals(token, pipelineId, method, userId, runId) {
   const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/assignments/distribute`, {
     method: 'POST',
     headers: authHeaders(token, true),
-    body: JSON.stringify(method === 'single_user' ? { method, userId } : { method }),
+    body: JSON.stringify({
+      method,
+      ...(method === 'single_user' ? { userId } : {}),
+      ...(runId ? { runId } : {}),
+    }),
   })
   return readResponse(response, 'Unable to assign deals.')
 }
 
 /** Unassigns the next chunk (≤ 100) of deals assigned by `source` (e.g. 'round_robin'); `userId` limits it to one owner. */
-export async function unassignCrmDealsBySource(token, pipelineId, source, userId) {
+export async function unassignCrmDealsBySource(token, pipelineId, source, userId, runId) {
   const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/assignments/unassign`, {
     method: 'POST',
     headers: authHeaders(token, true),
-    body: JSON.stringify(userId ? { source, userId } : { source }),
+    // No source + userId = every deal that user owns in the pipeline.
+    body: JSON.stringify({ ...(source ? { source } : {}), ...(userId ? { userId } : {}), ...(runId ? { runId } : {}) }),
   })
   return readResponse(response, 'Unable to unassign deals.')
+}
+
+/** Assign users drawer history, newest first; chunked runs come back as one item. */
+export async function fetchCrmPipelineActivity(token, pipelineId, { cursor, action } = {}) {
+  const params = new URLSearchParams({ limit: '50' })
+  if (cursor) params.set('cursor', cursor)
+  if (action) params.set('action', action)
+  const query = params.toString()
+  const response = await fetch(
+    `${API_BASE_URL}/crm/pipelines/${pipelineId}/activity${query ? `?${query}` : ''}`,
+    { headers: authHeaders(token) },
+  )
+  return readResponse(response, 'Unable to load the history.')
 }

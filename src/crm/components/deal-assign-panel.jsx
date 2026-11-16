@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { LuChevronDown } from 'react-icons/lu'
+import { createPortal } from 'react-dom'
 import Alert from '../../appcomponents/alert.jsx'
 import Loader from '../../appcomponents/loader.jsx'
 import Tooltip from '../../appcomponents/tooltip.jsx'
@@ -173,11 +174,13 @@ export default function DealAssignPanel({
     setActionError('')
     setNotice('')
     let done = 0
+    // One id for every chunk, so the history shows this run as one entry.
+    const runId = crypto.randomUUID()
     setRun({ method, total, done, status: 'running', message: '' })
     try {
       for (;;) {
         if (!mountedRef.current) return
-        const result = await distributeCrmUnassignedDeals(token, pipelineId, method, user?.userId)
+        const result = await distributeCrmUnassignedDeals(token, pipelineId, method, user?.userId, runId)
         done += result.assignedCount
         if (mountedRef.current) setRun({ method, total, done: Math.min(done, total), status: 'running', message: '' })
         if (result.remaining === 0) break
@@ -222,6 +225,7 @@ export default function DealAssignPanel({
     setNotice('')
     setUnassign({
       source,
+      origin: owner?.origin ?? source,
       userId: owner?.userId ?? null,
       username: owner?.username ?? null,
       isReceiver:
@@ -238,11 +242,12 @@ export default function DealAssignPanel({
     if (!unassign || unassign.status === 'running') return
     const { source, userId, username, total } = unassign
     let done = 0
+    const runId = crypto.randomUUID()
     setUnassign({ ...unassign, done, status: 'running', error: '' })
     try {
       for (;;) {
         if (!mountedRef.current) return
-        const result = await unassignCrmDealsBySource(token, pipelineId, source, userId)
+        const result = await unassignCrmDealsBySource(token, pipelineId, source, userId, runId)
         done += result.unassignedCount
         if (mountedRef.current) {
           setUnassign((current) => current && { ...current, total: Math.max(total, done), done })
@@ -417,7 +422,9 @@ export default function DealAssignPanel({
                       run={run}
                       unassign={unassign}
                       onShare={() => handleBulk('round_robin')}
-                      onUnassignUser={(owner) => openUnassign('round_robin', owner)}
+                      onUnassignUser={(owner, scope) =>
+                        openUnassign(scope === 'all' ? null : 'round_robin', { ...owner, origin: 'round_robin' })
+                      }
                       revertAction={
                         canEdit && roundRobinAssigned > 0 ? (
                           <button
@@ -449,7 +456,9 @@ export default function DealAssignPanel({
                       owners={overview.singleUserOwners ?? []}
                       onUseForNewDeals={(user) => requestRule('single_user', user)}
                       onGive={(user) => handleBulk('single_user', user)}
-                      onUnassign={(owner) => openUnassign('single_user', owner)}
+                      onUnassign={(owner, scope) =>
+                        openUnassign(scope === 'all' ? null : 'single_user', { ...owner, origin: 'single_user' })
+                      }
                     />
                   ) : null}
                 </div>
@@ -484,11 +493,13 @@ export default function DealAssignPanel({
           !unassign
             ? ''
             : unassign.username
-              ? `This removes ${unassign.username} from ${plural(unassign.total, 'deal')} assigned by ${RULE_LABELS[
+              ? `${
                   unassign.source
-                ].toLowerCase()}. Their other deals are not affected.${
-                  unassign.isReceiver ? ` ${unassign.username} still gets new deals until you change the rule.` : ''
-                }`
+                    ? `This removes ${unassign.username} from ${plural(unassign.total, 'deal')} assigned by ${RULE_LABELS[
+                        unassign.source
+                      ].toLowerCase()}. Their other deals are not affected.`
+                    : `This removes ${unassign.username} from all ${plural(unassign.total, 'deal')} they own in this pipeline, however they were assigned.`
+                }${unassign.isReceiver ? ` ${unassign.username} still gets new deals until you change the rule.` : ''}`
               : `This removes the owner from ${plural(unassign.total, 'deal')} assigned by ${RULE_LABELS[
                   unassign.source
                 ].toLowerCase()}. Deals assigned another way are not affected, and the rule for new deals stays the same.`
@@ -580,6 +591,115 @@ function ActionButton({ label, spinning, isBusy, onClick, variant = 'primary' })
   )
 }
 
+/**
+ * Per-user Unassign. Always a small menu with two scopes and their counts:
+ * this card's method only, or every deal the user owns in the pipeline. An
+ * option is disabled when it removes nothing or the same deals as the other. The menu is fixed-positioned (portal) so the
+ * scrolling user lists cannot clip it.
+ */
+function UnassignMenu({ username, methodLabel, methodCount, totalCount, disabled, onPick }) {
+  const [menu, setMenu] = useState(null) // { top?, bottom?, right }
+  const buttonRef = useRef(null)
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (!menu) return undefined
+    const close = () => setMenu(null)
+    const onPointer = (event) => {
+      if (!menuRef.current?.contains(event.target) && !buttonRef.current?.contains(event.target)) close()
+    }
+    const onKey = (event) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault() // keep the drawer open
+      close()
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey, true)
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [menu])
+
+  if (!totalCount) return null
+  const name = username || 'this user'
+  const linkClass =
+    'inline-flex items-center gap-0.5 whitespace-nowrap text-xs font-medium text-[#b76c4f] underline underline-offset-2 transition-colors hover:text-[#cc785c] disabled:cursor-not-allowed disabled:opacity-60'
+
+  const toggle = () => {
+    if (menu) {
+      setMenu(null)
+      return
+    }
+    const rect = buttonRef.current.getBoundingClientRect()
+    const right = window.innerWidth - rect.right
+    // Open upwards when there is no room below.
+    setMenu(
+      window.innerHeight - rect.bottom < 110
+        ? { bottom: window.innerHeight - rect.top + 4, right }
+        : { top: rect.bottom + 4, right },
+    )
+  }
+  const pick = (scope) => {
+    setMenu(null)
+    onPick(scope)
+  }
+  // An option is disabled when it would remove nothing, or the same deals as the other one.
+  const options = [
+    { scope: 'method', label: methodLabel, count: methodCount, disabled: methodCount === 0 },
+    { scope: 'all', label: 'All deals', count: totalCount, disabled: methodCount === totalCount },
+  ]
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggle}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(menu)}
+        aria-label={`Unassign deals from ${name}`}
+        className={linkClass}
+      >
+        Unassign
+        <LuChevronDown className={`h-3 w-3 transition-transform ${menu ? 'rotate-180' : ''}`} aria-hidden="true" />
+      </button>
+      {menu
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              aria-label={`Unassign deals from ${name}`}
+              className="fixed z-[70] w-52 rounded-control border bg-surface py-1 shadow-panel"
+              style={{ borderColor: 'var(--ew-line)', top: menu.top, bottom: menu.bottom, right: menu.right }}
+            >
+              {options.map((option) => (
+                <button
+                  key={option.scope}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => pick(option.scope)}
+                  disabled={option.disabled}
+                  aria-disabled={option.disabled}
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-[var(--ew-ink)] transition-colors hover:bg-ground/70 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+                >
+                  <span>{option.label}</span>
+                  <span className="shrink-0 text-xs tabular-nums text-[var(--ew-muted)]">{option.count}</span>
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  )
+}
+
 /** Progress bar shown under a user's row while their deals are being unassigned. */
 function UnassignProgress({ progress, username, className = '' }) {
   const percent = progress.total ? Math.round((progress.done / progress.total) * 100) : 0
@@ -624,11 +744,16 @@ function RoundRobinSection({
 }) {
   const ownedBy = new Map(owners.map((owner) => [owner.userId, owner.dealCount]))
   const rows = [
-    ...users.map((user) => ({ userId: user.userId, username: user.username, eligible: true })),
+    ...users.map((user) => ({ userId: user.userId, username: user.username, eligible: true, totalDeals: user.dealCount ?? 0 })),
     // Users who lost access but still own round-robin deals.
     ...owners
       .filter((owner) => !users.some((user) => user.userId === owner.userId))
-      .map((owner) => ({ userId: owner.userId, username: owner.username, eligible: false })),
+      .map((owner) => ({
+        userId: owner.userId,
+        username: owner.username,
+        eligible: false,
+        totalDeals: owner.totalDeals ?? owner.dealCount,
+      })),
   ]
   // Rows count only the deals round robin gave each user — exactly what their Unassign removes.
   const maxLoad = Math.max(1, ...rows.map((row) => ownedBy.get(row.userId) ?? 0))
@@ -641,7 +766,10 @@ function RoundRobinSection({
         <ul className="mt-2 max-h-64 space-y-1.5 overflow-y-auto pr-1">
           {rows.map((row) => {
             const owned = ownedBy.get(row.userId) ?? 0
-            const rowRun = unassign?.userId === row.userId && unassign.status === 'running' ? unassign : null
+            const rowRun =
+              unassign?.userId === row.userId && unassign.origin === 'round_robin' && unassign.status === 'running'
+                ? unassign
+                : null
             return (
               <li key={row.userId}>
                 <div className="flex items-center gap-3">
@@ -658,21 +786,29 @@ function RoundRobinSection({
                       style={{ width: `${(owned / maxLoad) * 100}%` }}
                     />
                   </span>
-                  <span className="w-14 shrink-0 text-right text-xs tabular-nums text-[var(--ew-muted)]">
+                  <span className="w-16 shrink-0 text-right text-xs tabular-nums text-[var(--ew-muted)]">
                     {plural(owned, 'deal')}
                   </span>
                   {canEdit ? (
-                    <span className="flex w-14 shrink-0 justify-end">
-                      {owned > 0 && !rowRun ? (
-                        <button
-                          type="button"
-                          onClick={() => onUnassignUser({ userId: row.userId, username: row.username, dealCount: owned })}
+                    <span className="flex w-20 shrink-0 justify-end">
+                      {!rowRun ? (
+                        <UnassignMenu
+                          username={row.username}
+                          methodLabel="Round-robin deals"
+                          methodCount={owned}
+                          totalCount={row.totalDeals}
                           disabled={isBusy}
-                          aria-label={`Unassign ${plural(owned, 'round robin deal')} from ${row.username || 'this user'}`}
-                          className="text-xs font-medium text-[#b76c4f] underline underline-offset-2 transition-colors hover:text-[#cc785c] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Unassign
-                        </button>
+                          onPick={(scope) =>
+                            onUnassignUser(
+                              {
+                                userId: row.userId,
+                                username: row.username,
+                                dealCount: scope === 'all' ? row.totalDeals : owned,
+                              },
+                              scope,
+                            )
+                          }
+                        />
                       ) : null}
                     </span>
                   ) : null}
@@ -744,14 +880,20 @@ function SingleUserSection({
   const picked = users.find((user) => user.userId === pickedId) ?? null
   const pickedIsTarget = Boolean(picked) && hasTarget && picked.userId === targetId
   const giving = run?.method === 'single_user' && run.status === 'running'
+  const singleBy = new Map(owners.map((owner) => [owner.userId, owner.dealCount]))
 
-  const ownedBy = new Map(owners.map((owner) => [owner.userId, owner.dealCount]))
   const rows = [
-    ...users.map((user) => ({ userId: user.userId, username: user.username, eligible: true })),
+    // totalDeals = every deal the user owns here, however it was assigned.
+    ...users.map((user) => ({ userId: user.userId, username: user.username, eligible: true, totalDeals: user.dealCount ?? 0 })),
     // Owners of single-user deals who are no longer eligible.
     ...owners
       .filter((owner) => !users.some((user) => user.userId === owner.userId))
-      .map((owner) => ({ userId: owner.userId, username: owner.username, eligible: false })),
+      .map((owner) => ({
+        userId: owner.userId,
+        username: owner.username,
+        eligible: false,
+        totalDeals: owner.totalDeals ?? owner.dealCount,
+      })),
   ]
 
   const headerLabel = hasTarget ? targetName || 'User unavailable' : 'Choose a user'
@@ -795,10 +937,13 @@ function SingleUserSection({
               style={{ borderColor: 'var(--ew-line)' }}
             >
               {rows.map((row) => {
-                const owned = ownedBy.get(row.userId) ?? 0
+                const owned = singleBy.get(row.userId) ?? 0
                 const isTarget = hasTarget && row.userId === targetId
                 const isPicked = row.userId === pickedId
-                const rowRun = unassign?.userId === row.userId && unassign.status === 'running' ? unassign : null
+                const rowRun =
+                  unassign?.userId === row.userId && unassign.origin === 'single_user' && unassign.status === 'running'
+                    ? unassign
+                    : null
                 const pickable = canEdit && row.eligible && !isBusy
                 return (
                   <li key={row.userId} className={isPicked ? 'bg-[#cc785c]/5' : ''}>
@@ -828,7 +973,9 @@ function SingleUserSection({
                             {row.username || 'User unavailable'}
                           </span>
                           <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--ew-muted)]">
-                            <span className="tabular-nums">{owned > 0 ? plural(owned, 'deal') : 'No deals'}</span>
+                            <span className="tabular-nums">
+                              {row.totalDeals > 0 ? plural(row.totalDeals, 'deal') : 'No deals'}
+                            </span>
                             {isTarget ? <span>(Gets new deals)</span> : null}
                             {!row.eligible ? (
                               <span className="rounded-pill bg-danger-soft px-1.5 py-px font-medium text-danger">No access</span>
@@ -836,16 +983,24 @@ function SingleUserSection({
                           </span>
                         </span>
                       </button>
-                      {canEdit && owned > 0 && !rowRun ? (
-                        <button
-                          type="button"
-                          onClick={() => onUnassign({ userId: row.userId, username: row.username, dealCount: owned })}
+                      {canEdit && !rowRun ? (
+                        <UnassignMenu
+                          username={row.username}
+                          methodLabel="Single-user deals"
+                          methodCount={owned}
+                          totalCount={row.totalDeals}
                           disabled={isBusy}
-                          aria-label={`Unassign ${plural(owned, 'single user deal')} from ${row.username || 'this user'}`}
-                          className="shrink-0 text-xs font-medium text-[#b76c4f] underline underline-offset-2 transition-colors hover:text-[#cc785c] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Unassign
-                        </button>
+                          onPick={(scope) =>
+                            onUnassign(
+                              {
+                                userId: row.userId,
+                                username: row.username,
+                                dealCount: scope === 'all' ? row.totalDeals : owned,
+                              },
+                              scope,
+                            )
+                          }
+                        />
                       ) : null}
                     </div>
                     {rowRun ? <UnassignProgress progress={rowRun} username={row.username} className="px-3 pb-2.5 pl-10" /> : null}
@@ -897,14 +1052,7 @@ function SingleUserSection({
               />
             ) : null}
             {draftId && draftId !== (hasTarget ? targetId : null) ? (
-              <button
-                type="button"
-                onClick={() => setDraftId(null)}
-                disabled={isBusy}
-                className="h-9 px-2 text-xs font-medium text-[var(--ew-muted)] underline underline-offset-2 hover:text-[var(--ew-ink)] disabled:opacity-60"
-              >
-                Clear
-              </button>
+              <ActionButton label="Clear" variant="secondary" isBusy={isBusy} onClick={() => setDraftId(null)} />
             ) : null}
           </div>
         </div>

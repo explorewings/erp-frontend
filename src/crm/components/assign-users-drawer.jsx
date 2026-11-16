@@ -12,6 +12,7 @@ import {
 } from '../api.js'
 import DealAssignPanel from './deal-assign-panel.jsx'
 import InlineError from './inline-error.jsx'
+import PipelineHistoryPanel from './pipeline-history-panel.jsx'
 import SlidingTabs from './sliding-tabs.jsx'
 import UserSelect from './user-select.jsx'
 import { isSuperRole } from '../utils.js'
@@ -19,6 +20,7 @@ import { isSuperRole } from '../utils.js'
 const TABS = [
   { id: 'pipeline-access', label: 'Access users' },
   { id: 'deal-assign', label: 'Deal assign' },
+  { id: 'history', label: 'History' },
 ]
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
@@ -73,6 +75,9 @@ function AssignUsersDrawerContent({
   // True while the Deal assign tab is saving, assigning or unassigning.
   const [isPanelBusy, setIsPanelBusy] = useState(false)
   const [busyToast, setBusyToast] = useState('')
+  // Bumped after every drawer action so the History tab reloads.
+  const [historyTick, setHistoryTick] = useState(0)
+  const bumpHistory = () => setHistoryTick((tick) => tick + 1)
 
   const onCloseRef = useRef(onClose)
   const ignorePopRef = useRef(false)
@@ -235,6 +240,7 @@ function AssignUsersDrawerContent({
       if (result.ruleChangedTo) parts.push('deal assignment rule switched to Manual')
       setAccessNotice(parts.length ? `Saved: ${parts.join(', ')}.` : 'Saved.')
 
+      if (result.addedCount || result.removedCount) bumpHistory()
       onAccessChangeRef.current?.(pipeline.id, next.map((member) => member.id))
       if (result.ruleChangedTo) onRuleChange?.(pipeline.id, result.ruleChangedTo)
       if (result.unassignedCount) onDealsChange?.()
@@ -297,7 +303,7 @@ function AssignUsersDrawerContent({
           className="flex h-full w-full flex-col border-l border-[var(--ew-line)] bg-[var(--ew-surface)] shadow-panel"
         >
           <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--ew-line)] px-5">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 overflow-x-auto">
               <SlidingTabs
                 tabs={TABS}
                 activeTab={activeTab}
@@ -474,9 +480,29 @@ function AssignUsersDrawerContent({
                 pipelineId={pipeline.id}
                 canEdit={canEditAccess}
                 isActive={activeTab === 'deal-assign'}
-                onRuleChange={(method) => onRuleChange?.(pipeline.id, method)}
-                onDealsChange={onDealsChange}
+                onRuleChange={(method) => {
+                  bumpHistory()
+                  onRuleChange?.(pipeline.id, method)
+                }}
+                onDealsChange={() => {
+                  bumpHistory()
+                  onDealsChange?.()
+                }}
                 onBusyChange={setIsPanelBusy}
+              />
+            </section>
+
+            <section
+              id="assign-users-panel-history"
+              role="tabpanel"
+              aria-labelledby="assign-users-tab-history"
+              hidden={activeTab !== 'history'}
+            >
+              <PipelineHistoryPanel
+                token={token}
+                pipelineId={pipeline.id}
+                isActive={activeTab === 'history'}
+                refreshKey={historyTick}
               />
             </section>
           </div>
