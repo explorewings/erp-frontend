@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   LuArrowRightLeft,
   LuChevronLeft,
@@ -18,6 +18,7 @@ import Loader from '../../appcomponents/loader.jsx'
 import AddDeal from '../components/add-deal.jsx'
 import AssignUsersDrawer from '../components/assign-users-drawer.jsx'
 import DealDetailsDrawer from '../components/deal-details-drawer.jsx'
+import DealTransferDrawer from '../components/deal-transfer-drawer.jsx'
 import CrmSearchModal from '../components/crm-search-modal.jsx'
 import InlineError from '../components/inline-error.jsx'
 import KanbanBoard from '../components/kanban-board.jsx'
@@ -28,6 +29,7 @@ import PipelineTag from '../components/pipeline-tag.jsx'
 import SlidingTabs from '../components/sliding-tabs.jsx'
 import { scrollBoardByColumns } from '../board-scroll.js'
 import { deleteCrmDeal } from '../api.js'
+import { isSuperRole } from '../utils.js'
 import useCrmDeals from '../hooks/use-crm-deals.js'
 import useCrmPipelines from '../hooks/use-crm-pipelines.js'
 
@@ -175,6 +177,7 @@ export default function Crm() {
   const [pipelineDrawerTab, setPipelineDrawerTab] = useState(null)
   const [isStageDrawerOpen, setIsStageDrawerOpen] = useState(false)
   const [isAssignUsersDrawerOpen, setIsAssignUsersDrawerOpen] = useState(false)
+  const [isDealTransferOpen, setIsDealTransferOpen] = useState(false)
   const [isAddDealOpen, setIsAddDealOpen] = useState(false)
   const [detailsDeal, setDetailsDeal] = useState(null)
   const [dealPendingDelete, setDealPendingDelete] = useState(null)
@@ -188,27 +191,23 @@ export default function Crm() {
   const stages = selectedPipeline?.stages ?? EMPTY_LIST
   const {
     deals,
+    stageTotals,
+    stageCursors,
+    loadingStages,
+    stageErrors,
     isLoading: isLoadingDeals,
     error: dealsError,
     moveError,
     clearMoveError,
     reload: reloadDeals,
+    loadMore,
     addDeal,
     updateDeal,
     removeDeal,
     moveDeal,
-  } = useCrmDeals(token, selectedPipeline?.id ?? null)
+  } = useCrmDeals(token, selectedPipeline?.id ?? null, searchQuery)
   const canAddDeal = Boolean(selectedPipeline) && stages.length > 0
 
-  const visibleDeals = useMemo(() => {
-    const query = searchQuery.trim().toLocaleLowerCase()
-    if (!query) return deals
-    return deals.filter(({ client }) =>
-      [client?.name, client?.email, client?.phoneNumber].some((value) =>
-        String(value || '').toLocaleLowerCase().includes(query),
-      ),
-    )
-  }, [deals, searchQuery])
 
   const selectPipeline = (id) => {
     setSelectedPipelineId(id)
@@ -242,6 +241,8 @@ export default function Crm() {
     'manage-pipelines': () => setPipelineDrawerTab('manage'),
     'manage-stages': () => setIsStageDrawerOpen(true),
     'assign-users': () => setIsAssignUsersDrawerOpen(true),
+    // Transfer is super-roles only on the server until Settings → Permissions.
+    ...(isSuperRole(user?.role) ? { 'deal-transfer': () => setIsDealTransferOpen(true) } : {}),
   }
 
   const handlePipelineDeleted = (pipelineId) => {
@@ -378,7 +379,12 @@ export default function Crm() {
                   <KanbanBoard
                     scrollerRef={boardScrollerRef}
                     stages={stages}
-                    deals={visibleDeals}
+                    deals={deals}
+                    stageTotals={stageTotals}
+                    stageCursors={stageCursors}
+                    loadingStages={loadingStages}
+                    stageErrors={stageErrors}
+                    onLoadMore={loadMore}
                     hasPipeline={Boolean(selectedPipeline)}
                     onDealMove={dealsError ? undefined : moveDeal}
                     onViewDeal={setDetailsDeal}
@@ -453,6 +459,19 @@ export default function Crm() {
           onRuleChange={(pipelineId, method) => updatePipeline(pipelineId, { dealAssignmentMethod: method })}
           onDealsChange={reloadDeals}
         />
+        {isDealTransferOpen && selectedPipeline ? (
+          <DealTransferDrawer
+            token={token}
+            pipeline={selectedPipeline}
+            pipelines={pipelines}
+            onClose={() => setIsDealTransferOpen(false)}
+            onTransferred={() => {
+              // The source board loses moved deals and the target gains copies.
+              reloadDeals()
+              reload()
+            }}
+          />
+        ) : null}
         <ManagePipelineDrawer
           open={pipelineDrawerTab !== null}
           initialTab={pipelineDrawerTab ?? 'manage'}

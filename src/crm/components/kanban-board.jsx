@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   DndContext,
@@ -13,6 +13,7 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { LuPlus, LuLayers } from 'react-icons/lu'
+import Loader from '../../appcomponents/loader.jsx'
 import { stageDndId } from '../utils.js'
 import CrmCard, { DealCardOverlay } from './crm-card.jsx'
 
@@ -58,10 +59,44 @@ const columnKeyboardCoordinates = (event, { context }) => {
   return undefined
 }
 
-/** A column's deal list. It looks the same whether or not a drag is in progress. */
-const StageDeals = memo(function StageDeals({ deals, onDealMove, onViewDeal, onRequestDeleteDeal }) {
+/**
+ * A column's deal list. It looks the same whether or not a drag is in progress.
+ * The column is paged: when the bottom comes within ~240px of view, the next
+ * 100 deals load automatically (IntersectionObserver on a sentinel).
+ */
+const StageDeals = memo(function StageDeals({
+  stageId,
+  deals,
+  hasMore,
+  isLoadingMore,
+  loadError,
+  onLoadMore,
+  onDealMove,
+  onViewDeal,
+  onRequestDeleteDeal,
+}) {
+  const scrollRef = useRef(null)
+  const sentinelRef = useRef(null)
+
+  // Re-created when the list grows, so a column that is still short after a
+  // page (sentinel already visible) keeps loading until it fills or ends.
+  useEffect(() => {
+    const root = scrollRef.current
+    const sentinel = sentinelRef.current
+    if (!hasMore || isLoadingMore || loadError || !root || !sentinel || !onLoadMore) return undefined
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) onLoadMore(stageId)
+      },
+      { root, rootMargin: '0px 0px 240px 0px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [stageId, hasMore, isLoadingMore, loadError, onLoadMore, deals.length])
+
   return (
     <div
+      ref={scrollRef}
       className="min-h-0 flex-1 space-y-2 overflow-y-auto border p-2.5"
       style={{
         borderColor: 'rgba(255,255,255,0.9)',
@@ -90,11 +125,51 @@ const StageDeals = memo(function StageDeals({ deals, onDealMove, onViewDeal, onR
           <p className="mt-1 max-w-[18ch] text-[11px] leading-5 text-[var(--ew-muted)]">Empty columns accept drops.</p>
         </div>
       )}
+      {hasMore || isLoadingMore || loadError ? (
+        <div ref={sentinelRef} className="flex min-h-10 items-center justify-center py-2" aria-live="polite">
+          {isLoadingMore ? (
+            <span role="status" aria-label="Loading more deals">
+              <Loader size={1} />
+            </span>
+          ) : loadError ? (
+            <p className="text-center text-[11px] leading-5 text-danger-strong">
+              {loadError}{' '}
+              <button
+                type="button"
+                onClick={() => onLoadMore?.(stageId)}
+                className="font-medium underline underline-offset-2"
+              >
+                Retry
+              </button>
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onLoadMore?.(stageId)}
+              className="text-[11px] font-medium text-[var(--ew-muted)] underline-offset-2 hover:text-[var(--ew-ink)] hover:underline"
+            >
+              Load more
+            </button>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 })
 
-const StageColumn = memo(function StageColumn({ stage, index, deals, onDealMove, onViewDeal, onRequestDeleteDeal }) {
+const StageColumn = memo(function StageColumn({
+  stage,
+  index,
+  deals,
+  total,
+  hasMore,
+  isLoadingMore,
+  loadError,
+  onLoadMore,
+  onDealMove,
+  onViewDeal,
+  onRequestDeleteDeal,
+}) {
   const { setNodeRef } = useDroppable({ id: stageDndId(stage.id), disabled: !onDealMove })
 
   return (
@@ -112,20 +187,30 @@ const StageColumn = memo(function StageColumn({ stage, index, deals, onDealMove,
             </span>
             <h2 className="truncate text-sm font-semibold tracking-[-0.01em] text-[var(--ew-ink)]">{stage.name}</h2>
           </div>
-          <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[#f7e8e0] px-2 text-xs font-semibold tabular-nums text-[var(--ew-ink)]" style={{ border: '1px solid rgba(255,255,255,0.95)', boxShadow: '3px 3px 8px rgba(221,194,178,0.42), -2px -2px 6px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.9)' }} aria-label={`${deals.length} deals`}>
-            {deals.length}
+          <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[#f7e8e0] px-2 text-xs font-semibold tabular-nums text-[var(--ew-ink)]" style={{ border: '1px solid rgba(255,255,255,0.95)', boxShadow: '3px 3px 8px rgba(221,194,178,0.42), -2px -2px 6px rgba(255,255,255,0.95), inset 2px 2px 4px rgba(255,255,255,0.9)' }} aria-label={`${total} deals`}>
+            {total}
           </span>
         </div>
         <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full" style={{ background: '#eadfd7', boxShadow: 'inset 2px 2px 4px rgba(27,26,24,0.08), inset -2px -2px 4px rgba(255,255,255,0.9)' }}>
           <div
             className="h-full bg-[#cc785c]"
-            style={{ width: `${Math.min(100, Math.max(8, deals.length * 18))}%` }}
+            style={{ width: `${Math.min(100, Math.max(8, total * 18))}%` }}
             aria-hidden="true"
           />
         </div>
       </header>
       <div className="mt-4 flex min-h-0 flex-1 flex-col">
-        <StageDeals deals={deals} onDealMove={onDealMove} onViewDeal={onViewDeal} onRequestDeleteDeal={onRequestDeleteDeal} />
+        <StageDeals
+          stageId={stage.id}
+          deals={deals}
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
+          loadError={loadError}
+          onLoadMore={onLoadMore}
+          onDealMove={onDealMove}
+          onViewDeal={onViewDeal}
+          onRequestDeleteDeal={onRequestDeleteDeal}
+        />
 </div>
     </section>
   )
@@ -135,6 +220,11 @@ export default function KanbanBoard({
   scrollerRef,
   stages = [],
   deals = [],
+  stageTotals = {},
+  stageCursors = {},
+  loadingStages = {},
+  stageErrors = {},
+  onLoadMore,
   hasPipeline = false,
   onDealMove,
   onViewDeal,
@@ -293,12 +383,18 @@ export default function KanbanBoard({
       >
         <div className="flex h-full min-w-max items-stretch gap-5 p-4">
           {stages.map((stage, index) => {
+            const columnDeals = stageDeals.get(String(stage.id)) || EMPTY_DEALS
             return (
               <StageColumn
                 key={stage.id}
                 stage={stage}
                 index={index}
-                deals={stageDeals.get(String(stage.id)) || EMPTY_DEALS}
+                deals={columnDeals}
+                total={Math.max(stageTotals[stage.id] ?? 0, columnDeals.length)}
+                hasMore={Boolean(stageCursors[stage.id])}
+                isLoadingMore={Boolean(loadingStages[stage.id])}
+                loadError={stageErrors[stage.id] || ''}
+                onLoadMore={onLoadMore}
                 onDealMove={onDealMove}
                 onViewDeal={onViewDeal}
                 onRequestDeleteDeal={onRequestDeleteDeal}

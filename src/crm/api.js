@@ -134,6 +134,38 @@ export async function fetchCrmDeals(token, pipelineId) {
   return readResponse(response, 'Unable to load deals.')
 }
 
+/** Kanban board: newest 100 deals of every stage + each stage's total. `q` searches clients. */
+export async function fetchCrmBoard(token, pipelineId, q) {
+  const params = new URLSearchParams()
+  if (q) params.set('q', q)
+  const query = params.toString()
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/board${query ? `?${query}` : ''}`, {
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to load deals.')
+}
+
+/** Next 100 deals of one stage, older than `cursor`. */
+export async function fetchCrmStageDeals(token, pipelineId, stageId, { cursor, q } = {}) {
+  const params = new URLSearchParams()
+  if (cursor) params.set('cursor', cursor)
+  if (q) params.set('q', q)
+  const response = await fetch(
+    `${API_BASE_URL}/crm/pipelines/${pipelineId}/stages/${stageId}/deals?${params.toString()}`,
+    { headers: authHeaders(token) },
+  )
+  return readResponse(response, 'Unable to load more deals.')
+}
+
+/** Ids of every deal in the given stages (Deal transfer). */
+export async function fetchCrmDealIds(token, pipelineId, stageIds) {
+  const params = new URLSearchParams({ stageIds: stageIds.join(',') })
+  const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/deal-ids?${params.toString()}`, {
+    headers: authHeaders(token),
+  })
+  return readResponse(response, 'Unable to load the deals to transfer.')
+}
+
 export async function fetchCrmAssignees(token, pipelineId) {
   const response = await fetch(`${API_BASE_URL}/crm/pipelines/${pipelineId}/assignees`, {
     headers: authHeaders(token),
@@ -243,4 +275,22 @@ export async function fetchCrmPipelineActivity(token, pipelineId, { cursor, acti
     { headers: authHeaders(token) },
   )
   return readResponse(response, 'Unable to load the history.')
+}
+
+/**
+ * One chunk (≤ 100 deals) of a move/copy run. `mode: 'move'` re-points the
+ * deals; `mode: 'copy'` creates new deals in the target pipeline.
+ */
+export async function transferCrmDeals(token, { mode, dealIds, targetPipelineId, targetStageId }) {
+  const response = await fetch(`${API_BASE_URL}/crm/deals/transfer`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({
+      mode,
+      dealIds,
+      targetPipelineId,
+      ...(targetStageId ? { targetStageId } : {}),
+    }),
+  })
+  return readResponse(response, 'Unable to transfer deals.')
 }
